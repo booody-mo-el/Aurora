@@ -1,18 +1,17 @@
-# Aurora — حالات التسليم
+# Aurora — delivery status
 
-## واجهة الموقع العربي RTL
-- [x] موقع ويب متجاوب باسم Aurora، بهوية ليلية مستوحاة من الشفق، صفحة رئيسية سينمائية، التنقل بين الرئيسية والاستكشاف وقائمتي، ومسارات تفاصيل العناوين.
-- [x] عرض رفوف الأفلام والمسلسلات واكتشاف الأعمال والبحث باستخدام بيانات TMDB، مع معلومات التفاصيل والتقييم والأنواع والوصف عند توفرها.
-- [x] واجهة المصادقة عبر بريد المستخدم باستخدام Supabase Auth، وحفظ العناوين إلى قائمة المستخدم مع استعلامات مقيّدة بالمالك في Supabase.
-- [x] لا تستضيف المنصة محتوى محميًا ولا تبثّه؛ توضح الواجهة أن البيانات والصور تعريفية ومصدرها TMDB.
-- [x] الواجهة باللغة العربية واتجاه RTL ومتجاوبة مع الهاتف والشاشات الأوسع.
+## Website and media discovery
+- [x] Responsive English, left-to-right Aurora website with cinematic night/aurora visual identity, home, discovery, My List, and title details.
+- [x] TMDB movie and TV discovery, search, title details, ratings, genres, and descriptions where available.
+- [x] The site does not host or stream copyrighted media; it displays informational metadata and identifies TMDB as the source.
 
-## إعداد Supabase للمحفوظات
-- [x] توفير SQL لجدول `saved_titles` مع ارتباط المستخدم والمحتوى ومنع التكرار وسياسات RLS للقراءة والإضافة والحذف ضمن سجلات المستخدم نفسه.
-- [ ] تطبيق ملف SQL على مشروع Supabase وتفعيل/التحقق من إعدادات البريد المرسل للمصادقة؛ يتطلب ذلك تنفيذ المستخدم أو الوصول إلى لوحة Supabase.
+## Supabase authentication and favorites
+- [x] Supabase Auth email magic-link flow for sign-in and account creation, with session restoration and sign-out.
+- [x] Per-user saved titles can be listed, added, and removed; movie and TV entries are distinguished, and database errors are surfaced.
+- [x] SQL schema and row-level security policies restrict reading, inserting, and deleting saved titles to their owner.
+- [ ] Run `supabase/schema.sql` in the Supabase SQL Editor and enable/configure email authentication and allowed redirect URLs in the Supabase project dashboard.
 
-## التحقق والتشغيل
-- [x] تشغيل خادم معاينة Aurora وخدمة TMDB الوسيطة مع إبقاء رمز TMDB على الخادم.
-- [x] اجتياز فحص TypeScript وبناء Vite.
-- [x] التحقق من وصول الخادم لنقطة الصحة ومن تهيئة مفاتيح التكامل دون طباعتها.
-- [ ] تأكيد النجاح على معاينة مرئية بعد فتحها من المستخدم عند الحاجة.
+## Runtime and verification
+- [x] TMDB API proxy keeps its access token on the server.
+- [x] TypeScript checks and Vite production build pass.
+- [x] Supabase URL and anon key are configured as environment settings; no service-role key is sent to the browser.
