@@ -1,0 +1,1 @@
+{"routes":[{"path":"/","title":"Aurora — اكتشف حكايتك التالية"},{"path":"/discover","title":"استكشف — Aurora"},{"path":"/movie/:id","title":"تفاصيل الفيلم — Aurora"},{"path":"/tv/:id","title":"تفاصيل المسلسل — Aurora"},{"path":"/my-list","title":"قائمتي — Aurora"}]}
