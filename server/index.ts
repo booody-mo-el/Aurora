@@ -20,7 +20,7 @@ app.get('/api/tmdb/*',(req,res,next)=>{
 });
 async function start(){
  if(process.env.NODE_ENV!=='production'){
-  const vite=await createViteServer({server:{middlewareMode:true},appType:'spa'});
+  const vite=await createViteServer({server:{middlewareMode:true,hmr:false},appType:'spa'});
   app.use(vite.middlewares);
  }else{
   const root=path.resolve(__dirname,'../dist');
