@@ -26,3 +26,6 @@
 - [x] TypeScript checks and Vite production build pass.
 - [x] TMDB home, popular movie, popular TV, and detail API endpoints returned HTTP 200 in the current preview environment; intro MP4 is served by the app.
 - [ ] In Supabase Dashboard, enable/configure email authentication and allowed redirect URLs; live review/favorite persistence depends on applying the SQL schema above.
+
+## Production deployment
+- [x] Production container installs the locked pnpm toolchain, builds the Vite site and compiled Express server, installs only runtime dependencies in its final stage, listens on the supplied `PORT` (default 3000), and serves the unauthenticated `/api/health` endpoint. Credentials are read only from runtime environment and are not copied into the image.
