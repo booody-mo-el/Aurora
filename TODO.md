@@ -29,3 +29,10 @@
 
 ## Production deployment
 - [x] Production container installs the locked pnpm toolchain, builds the Vite site and compiled Express server, installs only runtime dependencies in its final stage, listens on the supplied `PORT` (default 3000), and serves the unauthenticated `/api/health` endpoint. Credentials are read only from runtime environment and are not copied into the image.
+
+
+## Expanded Aurora catalog and navigation
+- [x] Add separate Movies, TV Series, Top 10 Movies, Celebrities, Downloads, and Favorites pages with persistent responsive navigation.
+- [x] Populate Top 10 from TMDB top-rated movies and add popular-person browsing plus individual celebrity profiles with known-for credits.
+- [x] Add favorites and a device-local Downloads title queue from catalog and detail cards; disclose that Aurora is an information service and does not host, stream, or download movie files.
+- [x] Keep the public route manifest synchronized with the added pages and dynamic celebrity/movie/TV detail routes.
