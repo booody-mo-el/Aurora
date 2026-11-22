@@ -17,6 +17,17 @@ async function api<T = any>(path: string): Promise<T> {
   if (!response.ok) throw new Error('Could not connect to the movie service');
   return response.json();
 }
+const archiveFilm = {
+  title: 'A Trip to the Moon', year: 1902,
+  itemUrl: 'https://archive.org/details/ATripToTheMoon20Fps',
+  videoUrl: 'https://archive.org/download/ATripToTheMoon20Fps/TripToTheMoon20Fps_512kb.mp4',
+  licenseUrl: 'https://creativecommons.org/licenses/by/3.0/',
+  excerpts: [
+    { label: 'Opening excerpt', start: 0, end: 30 },
+    { label: 'Excerpt 2', start: 180, end: 210 },
+    { label: 'Excerpt 3', start: 450, end: 480 }
+  ]
+};
 const downloadKey = 'aurora-download-queue';
 function readDownloadQueue(): Film[] {
   try { return JSON.parse(localStorage.getItem(downloadKey) || '[]'); } catch { return []; }
@@ -55,6 +66,7 @@ function App() {
   const [detailItem, setDetailItem] = useState<any>(null);
   const [personItem, setPersonItem] = useState<Person | null>(null);
   const [personLoading, setPersonLoading] = useState(false);
+  const [archiveClip, setArchiveClip] = useState(0);
 
   useEffect(() => {
     const pop = () => setPath(location.pathname);
@@ -212,7 +224,7 @@ function App() {
   const navItems = [
     { label: 'Home', to: '/', icon: null }, { label: 'Movies', to: '/movies', icon: null },
     { label: 'Series', to: '/series', icon: null }, { label: 'Top 10', to: '/top-movies', icon: <Trophy size={15} /> },
-    { label: 'Celebrities', to: '/celebrities', icon: null }, { label: 'Downloads', to: '/downloads', icon: <Download size={15} /> },
+    { label: 'Celebrities', to: '/celebrities', icon: null }, { label: 'Free Films', to: '/free-films', icon: <Play size={15} /> }, { label: 'Downloads', to: '/downloads', icon: <Download size={15} /> },
     { label: 'Favorites', to: '/my-list', icon: <Heart size={15} /> }
   ];
   const activeNav = path === '/' ? '/' : path.startsWith('/movie') ? '/movies' : path.startsWith('/tv') ? '/series' : path;
@@ -225,6 +237,7 @@ function App() {
     </main>
     : celebrity ? <main className="searchPage celebrityPage">{personItem ? <><button className="backBtn" onClick={() => go('/celebrities')}>← All celebrities</button><section className="celebrityHero"><div className="celebrityPortrait">{personItem.profile_path ? <img src={img(personItem.profile_path, 'h632')} alt={personItem.name} /> : <UserRound />}</div><div><p className="eyebrow">{personItem.known_for_department || 'Artist'}</p><h1>{personItem.name}</h1>{personItem.birthday && <p className="muted">Born {personItem.birthday}{personItem.place_of_birth ? ` · ${personItem.place_of_birth}` : ''}</p>}<p>{personItem.biography || 'Explore the films and series featuring this artist.'}</p></div></section><h2 className="sectionTitle">Known for</h2><div className="grid">{(personItem as any).combined_credits?.cast?.slice().sort((a: Film, b: Film) => (b.vote_average || 0) - (a.vote_average || 0)).slice(0, 16).map((film: Film) => card({ ...film, media_type: film.media_type || 'movie' }))}</div></> : <><p className="eyebrow">Aurora spotlight</p><h1>Popular <span>celebrities</span></h1>{personLoading ? <p className="muted">Loading profile…</p> : <p className="muted">A closer look at the performers and creators behind your favorite stories.</p>}</>}</main>
     : path === '/discover' ? <main className="searchPage"><p className="eyebrow">A world of stories</p><h1>Discover <span>Your next story</span></h1>{shelf('Popular movies', movies, '/movies')}{shelf('Popular TV shows', shows, '/series')}{peopleShelf()}</main>
+    : path === '/free-films' ? <main className="searchPage freeFilmsPage"><p className="eyebrow">PUBLIC-DOMAIN &amp; OPEN-LICENSE PICKS</p><h1>Free <span>Archive Films</span></h1><p className="pageIntro muted">Watch selected films and excerpts that have reuse information on their source pages. Rights can vary by item and country.</p><article className="archiveFeature"><div className="archiveFilmTop"><div><p className="eyebrow">CLASSIC SCI-FI · {archiveFilm.year}</p><h2>{archiveFilm.title}</h2></div><a className="archiveSource" href={archiveFilm.itemUrl} target="_blank" rel="noreferrer">Internet Archive item ↗</a></div><div className="archiveMotion"><video key={archiveClip} controls playsInline preload="metadata" src={`${archiveFilm.videoUrl}#t=${archiveFilm.excerpts[archiveClip].start},${archiveFilm.excerpts[archiveClip].end}`} aria-label={`${archiveFilm.title}, ${archiveFilm.excerpts[archiveClip].label}`} /><div className="archiveGlow" /></div><div className="excerptControls"><span>Choose an excerpt</span>{archiveFilm.excerpts.map((clip, index) => <button key={clip.start} className={archiveClip === index ? 'selected' : ''} onClick={() => setArchiveClip(index)}>{clip.label} · {Math.floor(clip.start / 60)}:{String(clip.start % 60).padStart(2,'0')}</button>)}</div><div className="archiveCredits"><p><strong>Rights note:</strong> This Internet Archive item lists a <a href={archiveFilm.licenseUrl} target="_blank" rel="noreferrer">CC BY 3.0</a> license. Internet Archive warns that uploader-provided rights metadata is not guaranteed, so verify the item’s status and local reuse rules before redistribution or commercial use.</p><p><strong>Attribution:</strong> <em>A Trip to the Moon</em> (1902), directed by Georges Méliès. 20 fps version from the linked Internet Archive item; uploader-set CC BY 3.0 license.</p></div></article><p className="archiveFooterNote">Aurora links directly to the Internet Archive video file and does not re-upload it. More films will be added only after checking their individual rights and playback terms.</p></main>
     : path === '/movies' ? <main className="searchPage"><p className="eyebrow">The big screen</p><h1>Movies <span>for every mood</span></h1><div className="grid">{movies.map(card)}</div></main>
     : path === '/series' ? <main className="searchPage"><p className="eyebrow">Long-form stories</p><h1>TV Series <span>Worth staying in for</span></h1><div className="grid">{shows.map(card)}</div></main>
     : path === '/top-movies' ? <main className="searchPage"><p className="eyebrow"><Trophy size={15} /> TMDB audience ratings</p><h1>Top 10 <span>Movies</span></h1><p className="muted pageIntro">Highest-rated movies in the TMDB catalog. Ratings and rankings may change.</p><div className="grid rankedGrid">{topMovies.slice(0, 10).map((film, index) => <div className="rankedItem" key={film.id}><b className="rankNumber">{String(index + 1).padStart(2, '0')}</b>{card(film)}</div>)}</div></main>

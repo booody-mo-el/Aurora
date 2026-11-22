@@ -36,3 +36,9 @@
 - [x] Populate Top 10 from TMDB top-rated movies and add popular-person browsing plus individual celebrity profiles with known-for credits.
 - [x] Add favorites and a device-local Downloads title queue from catalog and detail cards; disclose that Aurora is an information service and does not host, stream, or download movie files.
 - [x] Keep the public route manifest synchronized with the added pages and dynamic celebrity/movie/TV detail routes.
+
+
+## Free Archive Films
+- [x] Add an English-language Free Films page with a direct Internet Archive MP4 player and three selectable short time-range excerpts.
+- [x] Identify the specific Internet Archive item and its uploader-set CC BY 3.0 metadata; display attribution, license link, source link, and warning to verify rights and local reuse rules.
+- [x] Add cinematic entrance/player motion and preserve reduced-motion preferences; keep the route manifest synchronized.
