@@ -12,6 +12,7 @@
 
 ## Supabase authentication and favorites
 - [x] Email magic-link sign-in/account creation, session restoration, and sign-out.
+- [x] Add Google OAuth sign-in through Supabase Auth alongside the existing email magic link; Google provider credentials and allowed redirect URLs must be configured in Supabase before the OAuth flow can complete.
 - [x] Signed-in users can list, add, and remove their own saved titles; database errors are surfaced.
 - [x] SQL schema and RLS policies restrict favorite reads/writes to the owner.
 
