@@ -10,6 +10,7 @@ type Film = {
   media_type?: string; genres?: { id: number; name: string }[]; genre_ids?: number[];
 };
 type Person = { id: number; name: string; known_for_department?: string; profile_path?: string | null; known_for?: Film[]; biography?: string; birthday?: string; place_of_birth?: string };
+type AuthMode = 'signin' | 'signup' | 'magic-link' | 'forgot' | 'sms-phone' | 'sms-code' | 'reset-password';
 const img = (path: string | null | undefined, size = 'w500') => path ? `https://image.tmdb.org/t/p/${size}${path}` : '';
 const title = (film: Film) => film.title || film.name || 'Untitled';
 async function api<T = any>(path: string): Promise<T> {
@@ -48,7 +49,13 @@ function App() {
   const [saved, setSaved] = useState<Film[]>([]);
   const [downloads, setDownloads] = useState<Film[]>(readDownloadQueue);
   const [auth, setAuth] = useState(false);
+  const [authMode, setAuthMode] = useState<AuthMode>('signin');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [smsToken, setSmsToken] = useState('');
+  const recoveryFlowRef = useRef(false);
   const [busy, setBusy] = useState(false);
   const [savedLoading, setSavedLoading] = useState(false);
   const [error, setError] = useState('');
@@ -81,9 +88,11 @@ function App() {
       if (!client) return;
       setDbClient(client);
       client.auth.getSession().then(({ data }: any) => setUser(data.session?.user || null));
-      const { data } = client.auth.onAuthStateChange((_event: string, session: any) => {
+      const { data } = client.auth.onAuthStateChange((event: string, session: any) => {
         const nextUser = session?.user || null; setUser(nextUser); setSaved([]);
-        if (nextUser) { setAuth(false); setError(''); }
+        if (event === 'PASSWORD_RECOVERY') {
+          recoveryFlowRef.current = true; setAuth(true); setAuthMode('reset-password'); setPassword(''); setConfirmPassword(''); setError('');
+        } else if (nextUser && !recoveryFlowRef.current) { setAuth(false); setError(''); }
       });
       subscription = data.subscription;
     });
@@ -141,6 +150,78 @@ function App() {
     const exists = downloads.some(item => item.id === film.id && item.media_type === film.media_type);
     const next = exists ? downloads.filter(item => !(item.id === film.id && item.media_type === film.media_type)) : [{ ...film, media_type: film.media_type || 'movie' }, ...downloads];
     setDownloads(next); localStorage.setItem(downloadKey, JSON.stringify(next));
+  }
+  async function signInWithPassword(event: React.FormEvent) {
+    event.preventDefault();
+    if (!supabase) { setError('Could not initialize Supabase. Check the project settings.'); return; }
+    setBusy(true); setError('');
+    try {
+      const { error: authError } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+      if (authError) setError(authError.message);
+    } catch { setError('Could not sign in right now. Please try again.'); }
+    finally { setBusy(false); }
+  }
+  async function createAccount(event: React.FormEvent) {
+    event.preventDefault();
+    if (!supabase) { setError('Could not initialize Supabase. Check the project settings.'); return; }
+    if (password.length < 8) { setError('Choose a password with at least 8 characters.'); return; }
+    if (password !== confirmPassword) { setError('The passwords do not match.'); return; }
+    setBusy(true); setError('');
+    try {
+      const { data, error: authError } = await supabase.auth.signUp({ email: email.trim(), password, options: { emailRedirectTo: window.location.origin } });
+      if (authError) setError(authError.message);
+      else { setAuthMode('signin'); setPassword(''); setConfirmPassword(''); setError(data.session ? 'Your account is ready. You are signed in.' : 'If this address can be registered, check your email to confirm your account.'); }
+    } catch { setError('Could not create the account right now. Please try again.'); }
+    finally { setBusy(false); }
+  }
+  async function requestPasswordReset(event: React.FormEvent) {
+    event.preventDefault();
+    if (!supabase) { setError('Could not initialize Supabase. Check the project settings.'); return; }
+    if (!email.trim()) { setError('Enter the email address for your account.'); return; }
+    setBusy(true); setError('');
+    try {
+      const { error: authError } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: window.location.origin });
+      setError(authError?.message || 'If an account exists for that email, a password-reset link will arrive shortly.');
+    } catch { setError('Could not send a reset email right now. Please try again.'); }
+    finally { setBusy(false); }
+  }
+  async function sendSmsRecoveryCode(event: React.FormEvent) {
+    event.preventDefault();
+    if (!supabase) { setError('Could not initialize Supabase. Check the project settings.'); return; }
+    const normalizedPhone = phoneNumber.replace(/[\s()-]/g, '');
+    if (!/^\+[1-9]\d{7,14}$/.test(normalizedPhone)) { setError('Enter your phone in international format, for example +201234567890.'); return; }
+    setBusy(true); setError('');
+    try {
+      const { error: authError } = await supabase.auth.signInWithOtp({ phone: normalizedPhone, options: { channel: 'sms', shouldCreateUser: false } });
+      if (authError) { recoveryFlowRef.current = false; setError('Could not send a code. Check that this verified phone is linked to your account and SMS sign-in is enabled.'); }
+      else { recoveryFlowRef.current = true; setPhoneNumber(normalizedPhone); setAuthMode('sms-code'); setError('Enter the verification code sent to your phone.'); }
+    } catch { recoveryFlowRef.current = false; setError('Could not send a code right now. Please try again.'); }
+    finally { setBusy(false); }
+  }
+  async function verifySmsRecoveryCode(event: React.FormEvent) {
+    event.preventDefault();
+    if (!supabase) { setError('Could not initialize Supabase. Check the project settings.'); return; }
+    if (!/^\d{4,10}$/.test(smsToken.trim())) { setError('Enter the verification code from your SMS.'); return; }
+    setBusy(true); setError(''); recoveryFlowRef.current = true;
+    try {
+      const { error: authError } = await supabase.auth.verifyOtp({ phone: phoneNumber, token: smsToken.trim(), type: 'sms' });
+      if (authError) setError('That code could not be verified. Check it or request a new one.');
+      else { setAuthMode('reset-password'); setPassword(''); setConfirmPassword(''); setError('Verified. Choose a new password for your account.'); }
+    } catch { setError('Could not verify the code right now. Please try again.'); }
+    finally { setBusy(false); }
+  }
+  async function saveNewPassword(event: React.FormEvent) {
+    event.preventDefault();
+    if (!supabase) { setError('Could not initialize Supabase. Check the project settings.'); return; }
+    if (password.length < 8) { setError('Choose a password with at least 8 characters.'); return; }
+    if (password !== confirmPassword) { setError('The passwords do not match.'); return; }
+    setBusy(true); setError('');
+    try {
+      const { error: authError } = await supabase.auth.updateUser({ password });
+      if (authError) setError(authError.message);
+      else { recoveryFlowRef.current = false; setAuth(false); setAuthMode('signin'); setPassword(''); setConfirmPassword(''); setSmsToken(''); setError('Your password has been updated.'); }
+    } catch { setError('Could not update your password right now. Please try again.'); }
+    finally { setBusy(false); }
   }
   async function login(event: React.FormEvent) {
     event.preventDefault();
@@ -255,7 +336,61 @@ function App() {
     : path === '/my-list' ? <main className="searchPage"><p className="eyebrow"><Heart size={15} /> Your cinematic space</p><h1>Favorites <span>My List</span></h1>{user ? (savedLoading ? <p className="muted">Loading your favorites…</p> : saved.length ? <div className="grid">{saved.map(card)}</div> : <div className="empty"><Heart /><h2>Your favorites are ready</h2><p>Save a movie or show and it will appear here.</p><button className="primary" onClick={() => go('/discover')}>Discover titles</button></div>) : <div className="empty"><Heart /><h2>Save what you love</h2><p>Sign in to keep your favorite movies and TV shows in one place.</p><button className="primary" onClick={() => setAuth(true)}>Sign in</button></div>}</main>
     : <><main className="hero" style={{ backgroundImage: hero?.backdrop_path ? `linear-gradient(90deg,rgba(5,12,17,.95) 0%,rgba(5,12,17,.72) 40%,rgba(5,12,17,.12) 100%),linear-gradient(0deg,#071016 0%,transparent 35%),url(${img(hero.backdrop_path, 'original')})` : '' }}><div className="auroraGlow" /><div className="heroText"><div className="eyebrow"><span className="liveDot" /> Picked for you by Aurora</div><h1>{hero ? title(hero) : 'Your next night starts here'}</h1><div className="heroMeta"><span><Star size={15} fill="currentColor" /> {(hero?.vote_average || 8.7).toFixed(1)}</span><span>{hero?.release_date?.slice(0, 4) || '2025'}</span><span>Editor’s pick</span></div><p>{hero?.overview || 'Discover stories that stay with you. A curated selection for tonight.'}</p><div className="heroBtns"><button className="primary" onClick={() => hero && go(`/${hero.media_type === 'tv' ? 'tv' : 'movie'}/${hero.id}`)}><Play size={17} fill="currentColor" /> View title & trailer</button><button className="secondary" onClick={() => hero && toggleSaved(hero)}><Heart size={17} /> Add to Favorites</button></div><div className="heroCount">01 <i /> 05</div></div><div className="heroLogo"><span>◜</span> AURORA VIDEO</div></main>{shelf('Trending this week', trending, '/top-movies')}{shelf('Movies worth your time', movies, '/movies')}{shelf('Shows to get hooked on', shows, '/series')}{shelf('Top rated movies', topMovies, '/top-movies')}{peopleShelf()}</>}
     <footer><div className="brand"><span className="brandMark">◜</span><b>Aurora</b></div><p>Your next night starts here.</p><small>This product uses the TMDB API and is not endorsed or certified by TMDB. Aurora provides discovery information only and does not host, download, or stream content.</small></footer>
-    {auth && <div className="modalShade" onClick={() => setAuth(false)}><section className="authModal" onClick={event => event.stopPropagation()}><button className="close" onClick={() => setAuth(false)}><X /></button><div className="brand modalBrand"><span className="brandMark">◜</span><b>Aurora</b></div><p className="eyebrow">Your cinematic space</p><h2>Welcome to Aurora</h2><p className="muted">Sign in securely with Google or continue with your email.</p><button className="googleSignIn" onClick={loginWithGoogle} disabled={busy}><svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#4285F4" d="M43.6 24.5c0-1.4-.1-2.8-.4-4.1H24v7.8h11a9.4 9.4 0 0 1-4.1 6.2v5.1h6.6c3.9-3.6 6.1-8.8 6.1-15Z"/><path fill="#34A853" d="M24 44c5.5 0 10.1-1.8 13.5-4.8l-6.6-5.1c-1.8 1.2-4 1.9-6.9 1.9-5.3 0-9.8-3.6-11.4-8.4H5.8v5.3A20 20 0 0 0 24 44Z"/><path fill="#FBBC05" d="M12.6 27.6a12 12 0 0 1 0-7.2v-5.3H5.8a20 20 0 0 0 0 17.8l6.8-5.3Z"/><path fill="#EA4335" d="M24 12c3 0 5.7 1 7.8 3.1l5.9-5.9C34.1 5.9 29.5 4 24 4A20 20 0 0 0 5.8 15.1l6.8 5.3C14.2 15.6 18.7 12 24 12Z"/></svg>{busy ? 'Connecting…' : 'Continue with Google'}</button><div className="authDivider"><span>OR CONTINUE WITH EMAIL</span></div><form onSubmit={login}><input type="email" required placeholder="Email address" value={email} onChange={event => setEmail(event.target.value)} /><button className="primary" disabled={busy}>{busy ? 'Sending…' : 'Send sign-in link'}</button></form>{error && <p className="formMsg">{error}</p>}<small>Sign in to save your favorite movies and TV shows.</small></section></div>}
+    {auth && <div className="modalShade" onClick={() => { setAuth(false); setAuthMode('signin'); setError(''); }}>
+      <section className="authModal" role="dialog" aria-modal="true" aria-labelledby="authTitle" onClick={event => event.stopPropagation()}>
+        <button className="close" aria-label="Close sign-in" onClick={() => { setAuth(false); setAuthMode('signin'); setError(''); }}><X /></button>
+        <div className="brand modalBrand"><span className="brandMark">◜</span><b>Aurora</b></div>
+        <p className="eyebrow">Your cinematic space</p>
+        <h2 id="authTitle">{authMode === 'signup' ? 'Create your account' : authMode === 'forgot' ? 'Reset your password' : authMode === 'sms-phone' ? 'Recover with your phone' : authMode === 'sms-code' ? 'Verify your phone' : authMode === 'reset-password' ? 'Choose a new password' : authMode === 'magic-link' ? 'Sign in with an email link' : 'Welcome to Aurora'}</h2>
+        <p className="muted">{authMode === 'forgot' ? 'We’ll email you a secure link to choose a new password.' : authMode === 'sms-phone' ? 'Use the verified phone number already linked to your Aurora account.' : authMode === 'sms-code' ? `Enter the code sent to ${phoneNumber}.` : authMode === 'reset-password' ? 'Create a new password to secure your account.' : authMode === 'signup' ? 'Create an Aurora account with your email and a password.' : authMode === 'magic-link' ? 'We’ll send a secure sign-in link to your email.' : 'Sign in to continue watching and keep your favorites together.'}</p>
+        {authMode === 'signin' && <>
+          <button className="googleSignIn" onClick={loginWithGoogle} disabled={busy}><svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#4285F4" d="M43.6 24.5c0-1.4-.1-2.8-.4-4.1H24v7.8h11a9.4 9.4 0 0 1-4.1 6.2v5.1h6.6c3.9-3.6 6.1-8.8 6.1-15Z"/><path fill="#34A853" d="M24 44c5.5 0 10.1-1.8 13.5-4.8l-6.6-5.1c-1.8 1.2-4 1.9-6.9 1.9-5.3 0-9.8-3.6-11.4-8.4H5.8v5.3A20 20 0 0 0 24 44Z"/><path fill="#FBBC05" d="M12.6 27.6a12 12 0 0 1 0-7.2v-5.3H5.8a20 20 0 0 0 0 17.8l6.8-5.3Z"/><path fill="#EA4335" d="M24 12c3 0 5.7 1 7.8 3.1l5.9-5.9C34.1 5.9 29.5 4 24 4A20 20 0 0 0 5.8 15.1l6.8 5.3C14.2 15.6 18.7 12 24 12Z"/></svg>{busy ? 'Connecting…' : 'Continue with Google'}</button>
+          <div className="authDivider"><span>OR SIGN IN WITH EMAIL</span></div>
+        </>}
+        {authMode === 'signin' && <form onSubmit={signInWithPassword}>
+          <label className="authField"><span>Email address</span><input type="email" autoComplete="username" required placeholder="name@example.com" value={email} onChange={event => setEmail(event.target.value)} /></label>
+          <label className="authField"><span>Password</span><input type="password" autoComplete="current-password" required placeholder="Your password" value={password} onChange={event => setPassword(event.target.value)} /></label>
+          <button type="button" className="authTextLink authForgot" onClick={() => { setAuthMode('forgot'); setError(''); }}>Forgot password?</button>
+          <button className="primary" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
+          <div className="authOptionLinks"><button type="button" className="authTextLink" onClick={() => { setAuthMode('signup'); setError(''); }}>Create account</button><button type="button" className="authTextLink" onClick={() => { setAuthMode('magic-link'); setError(''); }}>Email me a sign-in link</button><button type="button" className="authTextLink" onClick={() => { setAuthMode('sms-phone'); setError(''); }}>Recover with SMS</button></div>
+        </form>}
+        {authMode === 'signup' && <form onSubmit={createAccount}>
+          <label className="authField"><span>Email address</span><input type="email" autoComplete="email" required placeholder="name@example.com" value={email} onChange={event => setEmail(event.target.value)} /></label>
+          <label className="authField"><span>Password</span><input type="password" autoComplete="new-password" minLength={8} required placeholder="At least 8 characters" value={password} onChange={event => setPassword(event.target.value)} /></label>
+          <label className="authField"><span>Confirm password</span><input type="password" autoComplete="new-password" minLength={8} required placeholder="Enter it again" value={confirmPassword} onChange={event => setConfirmPassword(event.target.value)} /></label>
+          <button className="primary" disabled={busy}>{busy ? 'Creating account…' : 'Create account'}</button>
+          <button type="button" className="authTextLink authBackLink" onClick={() => { setAuthMode('signin'); setError(''); }}>Already have an account? Sign in</button>
+        </form>}
+        {authMode === 'magic-link' && <form onSubmit={login}>
+          <label className="authField"><span>Email address</span><input type="email" autoComplete="email" required placeholder="name@example.com" value={email} onChange={event => setEmail(event.target.value)} /></label>
+          <button className="primary" disabled={busy}>{busy ? 'Sending…' : 'Send sign-in link'}</button>
+          <button type="button" className="authTextLink authBackLink" onClick={() => { setAuthMode('signin'); setError(''); }}>Back to sign in</button>
+        </form>}
+        {authMode === 'forgot' && <form onSubmit={requestPasswordReset}>
+          <label className="authField"><span>Email address</span><input type="email" autoComplete="email" required placeholder="name@example.com" value={email} onChange={event => setEmail(event.target.value)} /></label>
+          <button className="primary" disabled={busy}>{busy ? 'Sending…' : 'Send reset link'}</button>
+          <button type="button" className="authTextLink authBackLink" onClick={() => { setAuthMode('signin'); setError(''); }}>Back to sign in</button>
+        </form>}
+        {authMode === 'sms-phone' && <form onSubmit={sendSmsRecoveryCode}>
+          <label className="authField"><span>Verified phone number</span><input type="tel" autoComplete="tel" required placeholder="+201234567890" value={phoneNumber} onChange={event => setPhoneNumber(event.target.value)} /></label>
+          <button className="primary" disabled={busy}>{busy ? 'Sending code…' : 'Send SMS code'}</button>
+          <small className="authHint">SMS recovery is available only for a phone already verified on your account. Your Supabase project must have phone auth and an SMS provider enabled.</small>
+          <button type="button" className="authTextLink authBackLink" onClick={() => { setAuthMode('signin'); setError(''); }}>Back to sign in</button>
+        </form>}
+        {authMode === 'sms-code' && <form onSubmit={verifySmsRecoveryCode}>
+          <label className="authField"><span>SMS verification code</span><input type="text" inputMode="numeric" autoComplete="one-time-code" required maxLength={10} placeholder="Enter code" value={smsToken} onChange={event => setSmsToken(event.target.value)} /></label>
+          <button className="primary" disabled={busy}>{busy ? 'Verifying…' : 'Verify and continue'}</button>
+          <button type="button" className="authTextLink authBackLink" onClick={() => { setAuthMode('sms-phone'); setSmsToken(''); setError(''); }}>Use a different phone</button>
+        </form>}
+        {authMode === 'reset-password' && <form onSubmit={saveNewPassword}>
+          <label className="authField"><span>New password</span><input type="password" autoComplete="new-password" minLength={8} required placeholder="At least 8 characters" value={password} onChange={event => setPassword(event.target.value)} /></label>
+          <label className="authField"><span>Confirm new password</span><input type="password" autoComplete="new-password" minLength={8} required placeholder="Enter it again" value={confirmPassword} onChange={event => setConfirmPassword(event.target.value)} /></label>
+          <button className="primary" disabled={busy}>{busy ? 'Updating…' : 'Update password'}</button>
+        </form>}
+        {error && <p className="formMsg" role="status" aria-live="polite">{error}</p>}
+        <small>Sign in securely to save favorites and keep your watchlist.</small>
+      </section>
+    </div>}
     {error && !auth && <div className="toast">{error}</div>}
   </>;
 }
