@@ -43,3 +43,10 @@
 - [x] Add an English-language Free Films page with a direct Internet Archive MP4 player and three selectable short time-range excerpts.
 - [x] Identify the specific Internet Archive item and its uploader-set CC BY 3.0 metadata; display attribution, license link, source link, and warning to verify rights and local reuse rules.
 - [x] Add cinematic entrance/player motion and preserve reduced-motion preferences; keep the route manifest synchronized.
+
+## Rights-documented full-movie streaming
+- [x] Add “Watch Full Movie” only on movie detail pages where the title matches a film in the rights-documented free-film library; never show it on TV pages or for unmatched TMDB titles.
+- [x] Provide an integrated responsive player with native MP4 controls for play, pause, volume, fullscreen, and progress, and a conditional embedded-provider player path for authorized providers that require it.
+- [x] Expand Free Films with the existing Internet Archive film and five Library of Congress public-domain film selections; keep a source record, rights statement/link, and attribution for each title, plus selectable excerpts.
+- [x] Do not use trailers as full movies or treat TMDB discovery as playback authorization; the Internet Archive CC BY 3.0 status is identified as uploader-declared and not guaranteed by the provider.
+- [ ] Verify build and desktop/mobile rendering of the new player and library without altering the published site.
