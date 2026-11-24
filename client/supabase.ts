@@ -5,7 +5,8 @@ export async function initializeSupabase(){
  try{
   const response=await fetch('/api/config');
   const config=await response.json();
-  if(config.supabaseUrl&&config.supabaseAnonKey)supabase=createClient(config.supabaseUrl,config.supabaseAnonKey);
+  const normalizedUrl=(config.supabaseUrl||'').trim().replace(/\/(rest|auth|storage|realtime|functions)\/v1\/?.*$/i,'').replace(/\/+$/,'');
+  if(normalizedUrl&&config.supabaseAnonKey)supabase=createClient(normalizedUrl,config.supabaseAnonKey.trim());
  }catch{ /* Browse mode remains available until Supabase is configured. */ }
  return supabase;
 }
