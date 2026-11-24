@@ -12,10 +12,17 @@ type Film = {
 };
 type Person = { id: number; name: string; known_for_department?: string; profile_path?: string | null; known_for?: Film[]; biography?: string; birthday?: string; place_of_birth?: string };
 type FreeFilm = {
-  id: string; title: string; year: number; itemUrl: string; videoUrl?: string;
+  id: string; title: string; year: number;
+  posterUrl?: string; description: string;
+  itemUrl: string; videoUrl?: string;
   playerType?: 'mp4' | 'embed'; embedUrl?: string;
   provider: string; rightsLabel: string; rightsUrl: string; rightsNote: string;
-  attribution: string; durationSeconds: number;
+  attribution: string; runtimeSeconds: number;
+  completeness: 'complete' | 'incomplete';
+  contentType: 'feature' | 'short';
+  sourceVerified: boolean;
+  availableQualities: string[];
+  countryRestrictions?: string[];
   excerpts: { label: string; start: number; end: number }[];
 };
 type AuthMode = 'signin' | 'signup' | 'magic-link' | 'forgot' | 'sms-phone' | 'sms-code' | 'reset-password';
@@ -29,76 +36,227 @@ async function api<T = any>(path: string): Promise<T> {
 const freeFilms: FreeFilm[] = [
   {
     id: 'trip-to-the-moon', title: 'A Trip to the Moon', year: 1902,
+    description: 'A historical silent short by Georges Méliès.',
     itemUrl: 'https://archive.org/details/ATripToTheMoon20Fps',
     videoUrl: 'https://archive.org/download/ATripToTheMoon20Fps/TripToTheMoon20Fps_512kb.mp4',
+    playerType: 'mp4',
     provider: 'Internet Archive', rightsLabel: 'CC BY 3.0 · uploader-declared',
     rightsUrl: 'https://creativecommons.org/licenses/by/3.0/',
     rightsNote: 'The linked Internet Archive item declares CC BY 3.0 for this 20 fps version. This is uploader-provided metadata, not an Internet Archive guarantee; confirm the rights in your territory before reuse or redistribution.',
     attribution: 'A Trip to the Moon (1902), directed by Georges Méliès. 20 fps version from the linked Internet Archive item; uploader-declared CC BY 3.0.',
-    durationSeconds: 501,
+    runtimeSeconds: 501,
+    completeness: 'complete',
+    contentType: 'short',
+    sourceVerified: false,
+    availableQualities: ['Source copy — quality not verified'],
     excerpts: [{ label: 'Opening', start: 0, end: 30 }, { label: 'The lunar journey', start: 180, end: 210 }, { label: 'The return', start: 450, end: 480 }]
   },
   {
     id: 'great-train-robbery', title: 'The Great Train Robbery', year: 1903,
+    description: 'An early silent film held as a historical motion-picture copy by the Library of Congress.',
     itemUrl: 'https://www.loc.gov/item/00694220/',
     videoUrl: 'https://tile.loc.gov/storage-services/service/mbrs/ntscrm/00000765/00000765.mp4',
-    provider: 'Library of Congress', rightsLabel: 'Public-domain film selection · LOC',
+    playerType: 'mp4',
+    provider: 'Library of Congress', rightsLabel: 'Rights status and copy completeness require verification',
     rightsUrl: 'https://www.loc.gov/free-to-use/public-domain-films-from-the-national-film-registry/',
     rightsNote: 'Listed by the Library of Congress in its Public Domain Films from the National Film Registry collection. The Library notes that rights can vary by item and territory; this catalog record describes its available copy as incomplete.',
     attribution: 'The Great Train Robbery (1903), Library of Congress, Motion Picture, Broadcasting and Recorded Sound Division.',
-    durationSeconds: 714,
+    runtimeSeconds: 714,
+    completeness: 'incomplete',
+    contentType: 'short',
+    sourceVerified: false,
+    availableQualities: ['Source copy — quality not verified'],
     excerpts: [{ label: 'Opening', start: 0, end: 30 }, { label: 'The train', start: 300, end: 330 }, { label: 'Finale', start: 660, end: 690 }]
   },
   {
     id: 'may-irwin-kiss', title: 'May Irwin Kiss', year: 1896,
+    description: 'An early silent motion-picture film held by the Library of Congress.',
     itemUrl: 'https://www.loc.gov/item/00694131/',
     videoUrl: 'https://tile.loc.gov/storage-services/service/mbrs/ntscrm/00047798/00047798.mp4',
-    provider: 'Library of Congress', rightsLabel: 'Public-domain film selection · LOC',
+    playerType: 'mp4',
+    provider: 'Library of Congress', rightsLabel: 'Rights status requires item-specific verification',
     rightsUrl: 'https://www.loc.gov/free-to-use/public-domain-films-from-the-national-film-registry/',
     rightsNote: 'Listed by the Library of Congress in its Public Domain Films from the National Film Registry collection. The Library advises users to assess item-specific rights and any territorial restrictions.',
     attribution: 'May Irwin Kiss (1896), Library of Congress, Motion Picture, Broadcasting and Recorded Sound Division.',
-    durationSeconds: 30,
+    runtimeSeconds: 30,
+    completeness: 'complete',
+    contentType: 'short',
+    sourceVerified: false,
+    availableQualities: ['Source copy — quality not verified'],
     excerpts: [{ label: 'Excerpt 1', start: 0, end: 8 }, { label: 'Excerpt 2', start: 8, end: 18 }, { label: 'Excerpt 3', start: 18, end: 29 }]
   },
   {
     id: 'mckinley-oath', title: 'President McKinley Taking the Oath', year: 1901,
+    description: 'An early silent motion-picture record held by the Library of Congress.',
     itemUrl: 'https://www.loc.gov/item/00694336/',
     videoUrl: 'https://tile.loc.gov/storage-services/service/mbrs/ntscrm/01906619/01906619.mp4',
-    provider: 'Library of Congress', rightsLabel: 'Public-domain film selection · LOC',
+    playerType: 'mp4',
+    provider: 'Library of Congress', rightsLabel: 'Rights status requires item-specific verification',
     rightsUrl: 'https://www.loc.gov/free-to-use/public-domain-films-from-the-national-film-registry/',
     rightsNote: 'Listed by the Library of Congress in its Public Domain Films from the National Film Registry collection. The Library notes that catalog metadata may not capture all privacy, publicity, licensing, or territorial restrictions.',
     attribution: 'President McKinley Taking the Oath (1901), Library of Congress, Motion Picture, Broadcasting and Recorded Sound Division.',
-    durationSeconds: 44,
+    runtimeSeconds: 44,
+    completeness: 'complete',
+    contentType: 'short',
+    sourceVerified: false,
+    availableQualities: ['Source copy — quality not verified'],
     excerpts: [{ label: 'Opening', start: 0, end: 12 }, { label: 'The ceremony', start: 12, end: 28 }, { label: 'Closing', start: 28, end: 43 }]
   },
   {
     id: 'san-francisco-earthquake', title: 'San Francisco Earthquake and Fire', year: 1906,
+    description: 'An early documentary motion-picture record of earthquake and fire damage.',
     itemUrl: 'https://www.loc.gov/item/00694425/',
     videoUrl: 'https://tile.loc.gov/storage-services/service/mbrs/ntscrm/00007947/00007947.mp4',
-    provider: 'Library of Congress', rightsLabel: 'Public-domain film selection · LOC',
+    playerType: 'mp4',
+    provider: 'Library of Congress', rightsLabel: 'Rights status requires item-specific verification',
     rightsUrl: 'https://www.loc.gov/free-to-use/public-domain-films-from-the-national-film-registry/',
     rightsNote: 'Listed by the Library of Congress in its Public Domain Films from the National Film Registry collection. The Library advises that rights and use restrictions may differ outside the United States.',
     attribution: 'San Francisco Earthquake and Fire (1906), Library of Congress, Motion Picture, Broadcasting and Recorded Sound Division.',
-    durationSeconds: 720,
+    runtimeSeconds: 720,
+    completeness: 'complete',
+    contentType: 'short',
+    sourceVerified: false,
+    availableQualities: ['Source copy — quality not verified'],
     excerpts: [{ label: 'Opening', start: 0, end: 30 }, { label: 'Ruins', start: 300, end: 330 }, { label: 'The city', start: 660, end: 690 }]
   },
   {
     id: 'westinghouse-panorama', title: 'Panorama of Machine Co. Aisle', year: 1904,
+    description: 'An early silent motion-picture panorama of a factory aisle.',
     itemUrl: 'https://www.loc.gov/item/96522104/',
     videoUrl: 'https://tile.loc.gov/storage-services/service/mbrs/westhpp/2122/2122.mp4',
-    provider: 'Library of Congress', rightsLabel: 'Public-domain film selection · LOC',
+    playerType: 'mp4',
+    provider: 'Library of Congress', rightsLabel: 'Rights status requires item-specific verification',
     rightsUrl: 'https://www.loc.gov/free-to-use/public-domain-films-from-the-national-film-registry/',
     rightsNote: 'Listed by the Library of Congress in its Public Domain Films from the National Film Registry collection. The catalog identifies this copy as a 1904 silent film; verify territorial and other item-specific restrictions before reuse.',
     attribution: 'Panorama of Machine Co. Aisle, Westinghouse Co. Works (1904), Library of Congress, Motion Picture, Broadcasting and Recorded Sound Division.',
-    durationSeconds: 206,
+    runtimeSeconds: 206,
+    completeness: 'complete',
+    contentType: 'short',
+    sourceVerified: false,
+    availableQualities: ['Source copy — quality not verified'],
     excerpts: [{ label: 'Opening', start: 0, end: 30 }, { label: 'Factory aisle', start: 80, end: 110 }, { label: 'Closing', start: 170, end: 200 }]
-  }
+  },
+  {
+    id: 'night-of-the-living-dead-1968',
+    title: 'Night of the Living Dead',
+    year: 1968,
+    description: 'George A. Romero’s 1968 independently produced horror feature in a restored transfer.',
+    itemUrl: 'https://archive.org/details/NightOfTheLivingDead1968-Restored',
+    videoUrl: 'https://archive.org/download/NightOfTheLivingDead1968-Restored/Notld1968Restoration-desktop.mp4',
+    playerType: 'mp4',
+    provider: 'Internet Archive',
+    rightsLabel: 'Public Domain Mark 1.0 · Internet Archive item',
+    rightsUrl: 'http://creativecommons.org/publicdomain/mark/1.0/',
+    rightsNote: 'The Internet Archive item identifies this 1968 film with Creative Commons Public Domain Mark 1.0 and lists a 95-minute, 50-second runtime. The Public Domain Mark communicates that no known copyright restrictions were identified; territorial privacy, publicity, and trademark restrictions may still apply.',
+    attribution: 'Night of the Living Dead (1968), George A. Romero. Restored transfer from the linked Internet Archive item.',
+    runtimeSeconds: 5750,
+    completeness: 'complete',
+    contentType: 'feature',
+    sourceVerified: true,
+    availableQualities: ['480p'],
+    countryRestrictions: [],
+    excerpts: [{ label: 'Opening', start: 0, end: 30 }, { label: 'Midpoint', start: 2875, end: 2905 }, { label: 'Finale', start: 5680, end: 5710 }]
+  },
+  {
+    id: 'his-girl-friday-1940',
+    title: 'His Girl Friday',
+    year: 1940,
+    description: 'Howard Hawks’ 1940 Columbia Pictures comedy feature.',
+    itemUrl: 'https://archive.org/details/HisGirlFriday',
+    videoUrl: 'https://archive.org/download/HisGirlFriday/MoviePowderPresentsHisGirlFriday.mp4',
+    playerType: 'mp4',
+    provider: 'Internet Archive',
+    rightsLabel: 'Public Domain Mark · Internet Archive item',
+    rightsUrl: 'http://creativecommons.org/licenses/publicdomain/',
+    rightsNote: 'The Internet Archive item records this feature as public domain and lists a runtime of 1:28:12. Verify territorial restrictions before reuse; playback is provided directly from the linked archive item.',
+    attribution: 'His Girl Friday (1940), Howard Hawks, Columbia Pictures. Internet Archive copy.',
+    runtimeSeconds: 5292,
+    completeness: 'complete',
+    contentType: 'feature',
+    sourceVerified: true,
+    availableQualities: ['480p'],
+    countryRestrictions: [],
+    excerpts: [{ label: 'Opening', start: 0, end: 30 }, { label: 'Midpoint', start: 2646, end: 2676 }, { label: 'Finale', start: 5220, end: 5250 }]
+  },
+  {
+    id: 'giant-gila-monster-1959',
+    title: 'The Giant Gila Monster',
+    year: 1959,
+    description: 'Ray Kellogg’s 1959 public-domain creature feature.',
+    itemUrl: 'https://archive.org/details/TheGiantGilaMonsterWidescreenQualityUpgrade',
+    videoUrl: 'https://archive.org/download/TheGiantGilaMonsterWidescreenQualityUpgrade/THE%20GIANT%20GILA%20MONSTER.mp4',
+    playerType: 'mp4',
+    provider: 'Internet Archive',
+    rightsLabel: 'Public Domain Mark 1.0 · Internet Archive item',
+    rightsUrl: 'http://creativecommons.org/publicdomain/mark/1.0/',
+    rightsNote: 'The Internet Archive item identifies this widescreen theatrical print with Public Domain Mark 1.0 and lists a complete runtime of 1:14:42. Territorial restrictions may still apply outside the United States.',
+    attribution: 'The Giant Gila Monster (1959), Ray Kellogg. Widescreen quality upgrade from the linked Internet Archive item.',
+    runtimeSeconds: 4482,
+    completeness: 'complete',
+    contentType: 'feature',
+    sourceVerified: true,
+    availableQualities: ['406p'],
+    countryRestrictions: ['Territorial rights should be verified'],
+    excerpts: [{ label: 'Opening', start: 0, end: 30 }, { label: 'Midpoint', start: 2241, end: 2271 }, { label: 'Finale', start: 4410, end: 4440 }]
+  },
 ];
+const isHttpUrl = (value: string | undefined) => {
+  if (!value) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' || url.protocol === 'http:';
+  } catch {
+    return false;
+  }
+};
+
+function validateFreeFilmCatalogEntry(film: FreeFilm): boolean {
+  return Boolean(
+    film.id.trim() &&
+    film.title.trim() &&
+    Number.isInteger(film.year) && film.year > 0 &&
+    film.description.trim() &&
+    isHttpUrl(film.itemUrl) &&
+    film.provider.trim() &&
+    film.rightsLabel.trim() &&
+    isHttpUrl(film.rightsUrl) &&
+    film.rightsNote.trim() &&
+    film.attribution.trim() &&
+    Number.isInteger(film.runtimeSeconds) && film.runtimeSeconds > 0 &&
+    film.availableQualities.length > 0 &&
+    (film.playerType === 'embed' ? isHttpUrl(film.embedUrl) : isHttpUrl(film.videoUrl))
+  );
+}
+
+const catalogFreeFilms = freeFilms.filter(validateFreeFilmCatalogEntry);
+
+function isVerifiedFullFeature(film: FreeFilm): boolean {
+  const isDirectlyPlayable = film.playerType === 'embed'
+    ? isHttpUrl(film.embedUrl)
+    : isHttpUrl(film.videoUrl);
+
+  return Boolean(
+    validateFreeFilmCatalogEntry(film) &&
+    film.sourceVerified &&
+    film.completeness === 'complete' &&
+    film.contentType === 'feature' &&
+    film.runtimeSeconds >= 40 * 60 &&
+    isDirectlyPlayable &&
+    film.rightsUrl.trim()
+  );
+}
+
 const normalizeTitle = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
 function findFreeFilmMatch(film: Film | null | undefined): FreeFilm | undefined {
   if (!film || (film.media_type && film.media_type !== 'movie')) return undefined;
   const filmYear = (film.release_date || '').slice(0, 4);
-  return freeFilms.find(entry => normalizeTitle(entry.title) === normalizeTitle(title(film)) && (!filmYear || filmYear === String(entry.year)));
+  if (!/^\d{4}$/.test(filmYear)) return undefined;
+
+  return catalogFreeFilms.find(entry =>
+    isVerifiedFullFeature(entry) &&
+    normalizeTitle(entry.title) === normalizeTitle(title(film)) &&
+    filmYear === String(entry.year)
+  );
 }
 const downloadKey = 'aurora-download-queue';
 function readDownloadQueue(): Film[] {
@@ -145,8 +303,24 @@ function App() {
   const [personLoading, setPersonLoading] = useState(false);
   const [selectedFreeFilmId, setSelectedFreeFilmId] = useState('trip-to-the-moon');
   const [archiveClip, setArchiveClip] = useState(0);
+  const [archivePlayerStatus, setArchivePlayerStatus] = useState<'loading' | 'ready' | 'error' | 'unavailable' | 'iframe'>('loading');
+  const [archiveDurationStatus, setArchiveDurationStatus] = useState<'pending' | 'matched' | 'mismatch' | 'unknown'>('pending');
   const playerRef = useRef<HTMLVideoElement | null>(null);
   const recoveryFlowRef = useRef(false);
+
+  useEffect(() => {
+    const film = freeFilms.find(entry => entry.id === selectedFreeFilmId);
+    setArchiveDurationStatus(film?.playerType === 'embed' ? 'unknown' : 'pending');
+    if (!film) {
+      setArchivePlayerStatus('unavailable');
+    } else if (film.playerType === 'embed' && isHttpUrl(film.embedUrl)) {
+      setArchivePlayerStatus('iframe');
+    } else if (isHttpUrl(film.videoUrl)) {
+      setArchivePlayerStatus('loading');
+    } else {
+      setArchivePlayerStatus('unavailable');
+    }
+  }, [selectedFreeFilmId]);
 
   useEffect(() => {
     const pop = () => setPath(location.pathname);
@@ -401,14 +575,14 @@ function App() {
     </main>
     : celebrity ? <main className="searchPage celebrityPage">{personItem ? <><button className="backBtn" onClick={() => go('/celebrities')}>← All celebrities</button><section className="celebrityHero"><div className="celebrityPortrait">{personItem.profile_path ? <img src={img(personItem.profile_path, 'h632')} alt={personItem.name} /> : <UserRound />}</div><div><p className="eyebrow">{personItem.known_for_department || 'Artist'}</p><h1>{personItem.name}</h1>{personItem.birthday && <p className="muted">Born {personItem.birthday}{personItem.place_of_birth ? ` · ${personItem.place_of_birth}` : ''}</p>}<p>{personItem.biography || 'Explore the films and series featuring this artist.'}</p></div></section><h2 className="sectionTitle">Known for</h2><div className="grid">{(personItem as any).combined_credits?.cast?.slice().sort((a: Film, b: Film) => (b.vote_average || 0) - (a.vote_average || 0)).slice(0, 16).map((film: Film) => card({ ...film, media_type: film.media_type || 'movie' }))}</div></> : <><p className="eyebrow">Aurora spotlight</p><h1>Popular <span>celebrities</span></h1>{personLoading ? <p className="muted">Loading profile…</p> : <p className="muted">A closer look at the performers and creators behind your favorite stories.</p>}</>}</main>
     : path === '/discover' ? <main className="searchPage"><p className="eyebrow">A world of stories</p><h1>Discover <span>Your next story</span></h1>{shelf('Popular movies', movies, '/movies')}{shelf('Popular TV shows', shows, '/series')}{peopleShelf()}</main>
-    : path === '/free-films' ? <main className="searchPage freeFilmsPage"><p className="eyebrow">PUBLIC-DOMAIN &amp; OPEN-LICENSE PICKS</p><h1>Free <span>Films</span></h1><p className="pageIntro muted">Stream complete films and jump to selected excerpts. Each title links to its source record and item-specific rights information; rights may vary by country.</p><div className="freeFilmShelf" aria-label="Choose a free film">{freeFilms.map(film => <button key={film.id} className={selectedFreeFilm.id === film.id ? 'selected' : ''} onClick={() => { setSelectedFreeFilmId(film.id); setArchiveClip(0); }}><small>{film.year} · {film.provider}</small><strong>{film.title}</strong><span>{film.rightsLabel}</span></button>)}</div><article className="archiveFeature"><div className="archiveFilmTop"><div><p className="eyebrow">{selectedFreeFilm.year} · {selectedFreeFilm.provider.toUpperCase()}</p><h2>{selectedFreeFilm.title}</h2></div><a className="archiveSource" href={selectedFreeFilm.itemUrl} target="_blank" rel="noreferrer">View source record ↗</a></div><div className="archiveMotion">{selectedFreeFilm.playerType === 'embed' && selectedFreeFilm.embedUrl ? <iframe className="archiveEmbed" src={selectedFreeFilm.embedUrl} title={`${selectedFreeFilm.title} full movie`} allow="autoplay; fullscreen; picture-in-picture" allowFullScreen loading="lazy" /> : <video key={selectedFreeFilm.id} ref={playerRef} controls playsInline preload="metadata" src={selectedFreeFilm.videoUrl} aria-label={`${selectedFreeFilm.title} full movie`} />}</div>{selectedFreeFilm.playerType !== 'embed' && <div className="excerptControls"><span>Jump to an excerpt</span>{selectedFreeFilm.excerpts.map((clip, index) => <button key={clip.start} className={archiveClip === index ? 'selected' : ''} onClick={() => { setArchiveClip(index); if (playerRef.current) { playerRef.current.currentTime = clip.start; void playerRef.current.play().catch(() => {}); } }}>{clip.label} · {Math.floor(clip.start / 60)}:{String(clip.start % 60).padStart(2,'0')}</button>)}</div>}<div className="archiveCredits"><p><strong>Rights status:</strong> {selectedFreeFilm.rightsNote} <a href={selectedFreeFilm.rightsUrl} target="_blank" rel="noreferrer">Rights source ↗</a></p><p><strong>Attribution:</strong> <em>{selectedFreeFilm.attribution}</em></p><p><strong>Playback:</strong> Aurora links directly to the provider’s file and does not re-upload it. The player uses native HTML5 controls for MP4 sources.</p></div></article><p className="archiveFooterNote">The TMDB catalog remains for discovery and trailers. Full-movie playback is shown only for titles matched to a source in this rights-documented library. Aurora does not use trailers as full films.</p></main>
+    : path === '/free-films' ? <main className="searchPage freeFilmsPage"><p className="eyebrow">PUBLIC-DOMAIN &amp; OPEN-LICENSE PICKS</p><h1>Free <span>Films</span></h1><p className="pageIntro muted">Stream the catalog and jump to individual scenes. Playback continues normally without preview boundaries. Each title links to its source record and item-specific rights information; rights may vary by country.</p><div className="freeFilmShelf" aria-label="Choose a free film">{freeFilms.map(film => <button key={film.id} className={selectedFreeFilm.id === film.id ? 'selected' : ''} onClick={() => { setSelectedFreeFilmId(film.id); setArchiveClip(0); }}><small>{film.year} · {film.provider}</small><strong>{film.title}</strong><span>{film.rightsLabel}</span></button>)}</div><article className="archiveFeature"><div className="archiveFilmTop"><div><p className="eyebrow">{selectedFreeFilm.year} · {selectedFreeFilm.provider.toUpperCase()}</p><h2>{selectedFreeFilm.title}</h2></div><a className="archiveSource" href={selectedFreeFilm.itemUrl} target="_blank" rel="noreferrer">View source record ↗</a></div><div className="archiveMotion">{selectedFreeFilm.playerType === 'embed' && isHttpUrl(selectedFreeFilm.embedUrl) ? <iframe className="archiveEmbed" src={selectedFreeFilm.embedUrl} title={`${selectedFreeFilm.title} full movie`} allow="autoplay; fullscreen; picture-in-picture" allowFullScreen loading="lazy" onLoad={() => setArchivePlayerStatus('iframe')} /> : isHttpUrl(selectedFreeFilm.videoUrl) ? <><video key={selectedFreeFilm.id} ref={playerRef} controls playsInline preload="metadata" src={selectedFreeFilm.videoUrl} aria-label={`${selectedFreeFilm.title} full movie`} onLoadStart={() => setArchivePlayerStatus('loading')} onLoadedMetadata={event => { const actualDuration = event.currentTarget.duration; const toleranceSeconds = Math.max(10, selectedFreeFilm.runtimeSeconds * 0.05); setArchiveDurationStatus(Number.isFinite(actualDuration) && actualDuration > 0 ? Math.abs(actualDuration - selectedFreeFilm.runtimeSeconds) <= toleranceSeconds ? 'matched' : 'mismatch' : 'unknown'); }} onCanPlay={() => setArchivePlayerStatus('ready')} onWaiting={() => setArchivePlayerStatus('loading')} onPlaying={() => setArchivePlayerStatus('ready')} onError={() => setArchivePlayerStatus('error')} />{archivePlayerStatus === 'loading' && <div className="archivePlayerState loading" role="status"><span className="archivePlayerSpinner" /><strong>Loading video…</strong><small>Preparing media metadata and playback</small></div>}{archivePlayerStatus === 'error' && <div className="archivePlayerState error" role="alert"><strong>Playback unavailable</strong><small>This browser could not play or load the source.</small><a className="archiveSourceButton" href={selectedFreeFilm.itemUrl} target="_blank" rel="noreferrer">Open source record</a></div>}</> : <div className="archivePlayerState unavailable" role="status"><strong>Playback source unavailable</strong><small>No valid MP4 or permitted embed URL is listed for this title.</small><a className="archiveSourceButton" href={selectedFreeFilm.itemUrl} target="_blank" rel="noreferrer">View source record</a></div>}</div>{selectedFreeFilm.playerType !== 'embed' && <div className="excerptControls"><span>Jump to scene</span>{selectedFreeFilm.excerpts.map((clip, index) => <button key={clip.start} className={archiveClip === index ? 'selected' : ''} onClick={() => { setArchiveClip(index); if (playerRef.current) playerRef.current.currentTime = clip.start; }}>{clip.label}</button>)}</div>}</article></main>
     : path === '/movies' ? <main className="searchPage"><p className="eyebrow">The big screen</p><h1>Movies <span>for every mood</span></h1><div className="grid">{movies.map(card)}</div></main>
     : path === '/series' ? <main className="searchPage"><p className="eyebrow">Long-form stories</p><h1>TV Series <span>Worth staying in for</span></h1><div className="grid">{shows.map(card)}</div></main>
     : path === '/top-movies' ? <main className="searchPage"><p className="eyebrow"><Trophy size={15} /> TMDB audience ratings</p><h1>Top 10 <span>Movies</span></h1><p className="muted pageIntro">Highest-rated movies in the TMDB catalog. Ratings and rankings may change.</p><div className="grid rankedGrid">{topMovies.slice(0, 10).map((film, index) => <div className="rankedItem" key={film.id}><b className="rankNumber">{String(index + 1).padStart(2, '0')}</b>{card(film)}</div>)}</div></main>
     : path === '/celebrities' ? <main className="searchPage"><p className="eyebrow">Aurora spotlight</p><h1>Popular <span>celebrities</span></h1><p className="muted pageIntro">Meet the actors and artists behind this week's most talked-about stories.</p><div className="peopleGrid">{people.map(personCard)}</div></main>
     : path === '/downloads' ? <main className="searchPage"><p className="eyebrow"><Download size={15} /> Your saved queue</p><h1>Downloads <span>Watchlist</span></h1><div className="infoBanner">Aurora does not host or download movie files. This is a personal title queue saved on this device, so you can keep track of what to find on your streaming services.</div>{downloads.length ? <div className="grid">{downloads.map(card)}</div> : <div className="empty"><Download /><h2>Your queue is empty</h2><p>Add a title using the download icon to keep it in this list.</p><button className="primary" onClick={() => go('/movies')}>Explore movies</button></div>}</main>
     : path === '/my-list' ? <main className="searchPage"><p className="eyebrow"><Heart size={15} /> Your cinematic space</p><h1>Favorites <span>My List</span></h1>{user ? (savedLoading ? <p className="muted">Loading your favorites…</p> : saved.length ? <div className="grid">{saved.map(card)}</div> : <div className="empty"><Heart /><h2>Your favorites are ready</h2><p>Save a movie or show and it will appear here.</p><button className="primary" onClick={() => go('/discover')}>Discover titles</button></div>) : <div className="empty"><Heart /><h2>Save what you love</h2><p>Sign in to keep your favorite movies and TV shows in one place.</p><button className="primary" onClick={() => setAuth(true)}>Sign in</button></div>}</main>
-    : <><main className="hero" style={{ backgroundImage: hero?.backdrop_path ? `linear-gradient(90deg,rgba(5,12,17,.95) 0%,rgba(5,12,17,.72) 40%,rgba(5,12,17,.12) 100%),linear-gradient(0deg,#071016 0%,transparent 35%),url(${img(hero.backdrop_path, 'original')})` : '' }}><div className="auroraGlow" /><div className="heroText"><div className="eyebrow"><span className="liveDot" /> Picked for you by Aurora</div><h1>{hero ? title(hero) : 'Your next night starts here'}</h1><div className="heroMeta"><span><Star size={15} fill="currentColor" /> {(hero?.vote_average || 8.7).toFixed(1)}</span><span>{hero?.release_date?.slice(0, 4) || '2025'}</span><span>Editor’s pick</span></div><p>{hero?.overview || 'Discover stories that stay with you. A curated selection for tonight.'}</p><div className="heroBtns"><button className="primary" onClick={() => hero && go(`/${hero.media_type === 'tv' ? 'tv' : 'movie'}/${hero.id}`)}><Play size={17} fill="currentColor" /> View title & trailer</button><button className="secondary" onClick={() => hero && toggleSaved(hero)}><Heart size={17} /> Add to Favorites</button></div><div className="heroCount">01 <i /> 05</div></div><div className="heroLogo"><span>◜</span> AURORA VIDEO</div></main>{shelf('Trending this week', trending, '/top-movies')}{shelf('Movies worth your time', movies, '/movies')}{shelf('Shows to get hooked on', shows, '/series')}{shelf('Top rated movies', topMovies, '/top-movies')}{peopleShelf()}</>}
+    : <><main className="hero" style={{ backgroundImage: hero?.backdrop_path ? `linear-gradient(90deg,rgba(5,12,17,.95) 0%,rgba(5,12,17,.72) 40%,rgba(5,12,17,.12) 100%),linear-gradient(0deg,#071016 0%,transparent 35%),url(${img(hero.backdrop_path, 'original')})` : '' }}><div className="auroraGlow" /><div className="heroText"><div className="eyebrow"><span className="liveDot" /> Picked for you by Aurora</div><h1>{hero ? title(hero) : 'Your next night starts here'}</h1><div className="heroMeta"><span><Star size={15} fill="currentColor" /> {(hero?.vote_average || 8.7).toFixed(1)}</span><span>{hero?.release_date?.slice(0, 4) || '2025'}</span><span>Editor’s pick</span></div><p>{hero?.overview || 'Discover stories that stay with you. A curated selection for tonight.'}</p><div className="heroBtns"><button className="primary" onClick={() => hero && go(`/${hero.media_type === 'tv' ? 'tv' : 'movie'}/${hero.id}`)}><Play size={17} fill="currentColor" /> View title &amp; trailer</button><button className="secondary" onClick={() => hero && toggleSaved(hero)}><Heart size={17} /> Add to Favorites</button></div><div className="heroCount">01 <i /> 05</div></div><div className="heroLogo"><span>◜</span> AURORA VIDEO</div></main>{shelf('Trending this week', trending, '/top-movies')}{shelf('Movies worth your time', movies, '/movies')}{shelf('Shows to get hooked on', shows, '/series')}{shelf('Top rated movies', topMovies, '/top-movies')}{peopleShelf()}</>}
     <footer><div className="brand"><span className="brandMark">◜</span><b>Aurora</b></div><p>Your next night starts here.</p><small>This product uses the TMDB API and is not endorsed or certified by TMDB. Aurora does not host or download copyrighted media. Full-length playback is linked only from rights-documented sources in the Free Films library.</small></footer>
     {auth && <div className="modalShade" onClick={() => { recoveryFlowRef.current = false; setAuth(false); setAuthMode('signin'); setError(''); }}>
       <section className="authModal" role="dialog" aria-modal="true" aria-labelledby="authTitle" onClick={event => event.stopPropagation()}>
@@ -416,11 +590,11 @@ function App() {
         <div className="brand modalBrand"><span className="brandMark">◜</span><b>Aurora</b></div>
         <p className="eyebrow">Your cinematic space</p>
         <h2 id="authTitle">{authMode === 'signup' ? 'Create your account' : authMode === 'forgot' ? 'Reset your password' : authMode === 'sms-phone' ? 'Recover with your phone' : authMode === 'sms-code' ? 'Verify your phone' : authMode === 'reset-password' ? 'Choose a new password' : authMode === 'magic-link' ? 'Sign in with an email link' : 'Welcome to Aurora'}</h2>
-        <p className="muted">{authMode === 'forgot' ? 'We’ll email you a secure link to choose a new password.' : authMode === 'sms-phone' ? 'Use the verified phone number already linked to your Aurora account.' : authMode === 'sms-code' ? `Enter the code sent to ${phoneNumber}.` : authMode === 'reset-password' ? 'Create a new password to secure your account.' : authMode === 'signup' ? 'Create an Aurora account with your email and a password.' : authMode === 'magic-link' ? 'We’ll send a secure sign-in link to your email.' : 'Sign in to continue watching and keep your favorites together.'}</p>
+        <p className="muted">{authMode === 'forgot' ? 'We’ll email you a secure link to choose a new password.' : authMode === 'sms-phone' ? 'Use the verified phone number already linked to your Aurora account.' : authMode === 'sms-code' ? `Enter the code sent to ${phoneNumber}.` : authMode === 'reset-password' ? 'Create a new password for your account.' : authMode === 'signup' ? 'Create an Aurora account with your email and a password.' : authMode === 'magic-link' ? 'We’ll send a secure sign-in link to your email.' : 'Sign in to continue watching and keep your favorites together.'}</p>
         {authMode === 'signin' && <>
           <button className="googleSignIn" onClick={loginWithGoogle} disabled={busy}><svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#4285F4" d="M43.6 24.5c0-1.4-.1-2.8-.4-4.1H24v7.8h11a9.4 9.4 0 0 1-4.1 6.2v5.1h6.6c3.9-3.6 6.1-8.8 6.1-15Z"/><path fill="#34A853" d="M24 44c5.5 0 10.1-1.8 13.5-4.8l-6.6-5.1c-1.8 1.2-4 1.9-6.9 1.9-5.3 0-9.8-3.6-11.4-8.4H5.8v5.3A20 20 0 0 0 24 44Z"/><path fill="#FBBC05" d="M12.6 27.6a12 12 0 0 1 0-7.2v-5.3H5.8a20 20 0 0 0 0 17.8l6.8-5.3Z"/><path fill="#EA4335" d="M24 12c3 0 5.7 1 7.8 3.1l5.9-5.9C34.1 5.9 29.5 4 24 4A20 20 0 0 0 5.8 15.1l6.8 5.3C14.2 15.6 18.7 12 24 12Z"/></svg>{busy ? 'Connecting…' : 'Continue with Google'}</button>
           <div className="authDivider"><span>OR SIGN IN WITH EMAIL</span></div>
-        </>}
+        </> }
         {authMode === 'signin' && <form onSubmit={signInWithPassword}>
           <label className="authField"><span>Email address</span><input type="email" autoComplete="username" required placeholder="name@example.com" value={email} onChange={event => setEmail(event.target.value)} /></label>
           <label className="authField"><span>Password</span><input type="password" autoComplete="current-password" required placeholder="Your password" value={password} onChange={event => setPassword(event.target.value)} /></label>
@@ -469,4 +643,15 @@ function App() {
   </>;
 }
 
-createRoot(document.getElementById('root')!).render(<App />);
+const rootElement = document.getElementById('root');
+if (!rootElement) throw new Error('Failed to find the root element');
+const root = createRoot(rootElement);
+root.render(<React.StrictMode><App /></React.StrictMode>);
+function formatRuntime(runtimeSeconds: number): string {
+  const hours = Math.floor(runtimeSeconds / 3600);
+  const minutes = Math.floor((runtimeSeconds % 3600) / 60);
+  const seconds = runtimeSeconds % 60;
+  return hours > 0
+    ? `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+    : `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
