@@ -4,10 +4,13 @@ import {
   ChevronLeft,
   ChevronRight,
   Clapperboard,
+  Compass,
   Download,
+  Film as FilmIcon,
   Flag,
   Heart,
   History,
+  Home,
   LogOut,
   Play,
   Search,
@@ -32,6 +35,7 @@ import {
   api,
   baseFreeFilms,
   findFreeFilmMatch,
+  findFreeShortMatch,
   formatRuntime,
   img,
   isAnimeFilm,
@@ -116,6 +120,38 @@ function favoritesKeyFor(profileId: string) {
 
 function searchHistoryKeyFor(profileId: string) {
   return `aurora-search-history:${profileId}`;
+}
+
+const prefsStorageKey = 'aurora-user-preferences';
+
+function isUuid(value: string | null | undefined): boolean {
+  return Boolean(value && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value));
+}
+
+function handleCardPointerMove(event: React.MouseEvent<HTMLElement>) {
+  if (typeof window !== 'undefined') {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (navigator.maxTouchPoints > 0 && window.matchMedia('(pointer: coarse)').matches && !window.matchMedia('(any-hover: hover)').matches) return;
+  }
+  const el = event.currentTarget;
+  const rect = el.getBoundingClientRect();
+  if (!rect.width || !rect.height) return;
+  const px = (event.clientX - rect.left) / rect.width;
+  const py = (event.clientY - rect.top) / rect.height;
+  const rx = ((0.5 - py) * 11).toFixed(2);
+  const ry = ((px - 0.5) * 13).toFixed(2);
+  el.style.setProperty('--rx', `${rx}deg`);
+  el.style.setProperty('--ry', `${ry}deg`);
+  el.style.setProperty('--mx', `${(px * 100).toFixed(1)}%`);
+  el.style.setProperty('--my', `${(py * 100).toFixed(1)}%`);
+}
+
+function handleCardPointerLeave(event: React.MouseEvent<HTMLElement>) {
+  const el = event.currentTarget;
+  el.style.setProperty('--rx', '0deg');
+  el.style.setProperty('--ry', '0deg');
+  el.style.setProperty('--mx', '50%');
+  el.style.setProperty('--my', '20%');
 }
 
 function trackAnalytics(type: string, label: string) {
@@ -272,8 +308,13 @@ function App() {
   const [reportReason, setReportReason] = useState('');
   const [reportMsg, setReportMsg] = useState('');
 
-  // Account page messages
+  // Account page messages & user playback preferences
   const [accountMsg, setAccountMsg] = useState('');
+  const [preferredPlaybackSpeed, setPreferredPlaybackSpeed] = useState<number>(() => {
+    const stored = readJsonStorage<{ preferred_playback_speed?: number }>(prefsStorageKey, {});
+    const val = Number(stored.preferred_playback_speed);
+    return Number.isFinite(val) && val >= 0.5 && val <= 2 ? val : 1;
+  });
 
   const recoveryFlowRef = useRef(false);
   const lastProgressSyncRef = useRef<number>(0);
@@ -287,10 +328,21 @@ function App() {
           setCustomSources(
             data.sources.map((s: any) => ({
               ...s,
-              completeness: 'complete',
+              completeness: s.completeness === 'incomplete' ? 'incomplete' : 'complete',
               sourceVerified: true,
+              fallbackUrls: Array.isArray(s.fallbackUrls) ? s.fallbackUrls : [],
+              qualitySources: Array.isArray(s.qualitySources) && s.qualitySources.length
+                ? s.qualitySources
+                : s.videoUrl
+                  ? [
+                      { label: s.playerType === 'hls' ? 'Adaptive HLS' : 'Primary', url: s.videoUrl },
+                      ...(Array.isArray(s.fallbackUrls) ? s.fallbackUrls.map((u: string, i: number) => ({ label: `Mirror ${i + 1}`, url: u })) : [])
+                    ]
+                  : [],
               availableQualities: [s.playerType === 'hls' ? 'HLS Stream' : 'MP4'],
-              excerpts: [{ label: 'Opening', start: 0, end: 30 }],
+              excerpts: Array.isArray(s.excerpts) && s.excerpts.length
+                ? s.excerpts
+                : [{ label: 'Opening', start: 0, end: Math.min(30, Number(s.runtimeSeconds) || 30) }],
               isCustom: true
             }))
           );
@@ -503,18 +555,25 @@ function App() {
           media_type: item.media_type
         }));
 
+        const scopedProfileId = isUuid(activeProfile.id) ? activeProfile.id : null;
         // Sync any guest favorites not yet in Supabase
         for (const gf of guestFavs) {
           const mt = gf.media_type || 'movie';
           if (!mapped.some(m => m.id === gf.id && m.media_type === mt)) {
-            const { error: insErr } = await client.from('saved_titles').insert({
+            const insertPayload: Record<string, unknown> = {
               user_id: user.id,
               tmdb_id: gf.id,
               media_type: mt,
               title: title(gf),
               poster_path: gf.poster_path,
               vote_average: gf.vote_average
-            });
+            };
+            if (scopedProfileId) insertPayload.profile_id = scopedProfileId;
+            let { error: insErr } = await client.from('saved_titles').insert(insertPayload);
+            if (insErr && scopedProfileId) {
+              delete insertPayload.profile_id;
+              ({ error: insErr } = await client.from('saved_titles').insert(insertPayload));
+            }
             if (!insErr) mapped.unshift({ ...gf, media_type: mt });
           }
         }
@@ -525,31 +584,66 @@ function App() {
         }
       });
 
-    // Load watch history from Supabase & merge with local
+    // Load user playback preferences from Supabase
+    client
+      .from('user_preferences')
+      .select('preferred_playback_speed')
+      .eq('user_id', user.id)
+      .maybeSingle()
+      .then(({ data }: any) => {
+        if (cancelled || !data) return;
+        const speed = Number(data.preferred_playback_speed);
+        if (Number.isFinite(speed) && speed >= 0.5 && speed <= 2) {
+          setPreferredPlaybackSpeed(speed);
+          writeJsonStorage(prefsStorageKey, { preferred_playback_speed: speed });
+        }
+      }, () => {});
+
+    // Load watch history from Supabase & merge with local (including uploading newer local guest entries)
     client
       .from('watch_history')
       .select('*')
       .eq('user_id', user.id)
       .order('last_watched_at', { ascending: false })
       .limit(30)
-      .then(({ data, error: whError }: any) => {
+      .then(async ({ data, error: whError }: any) => {
         if (cancelled || whError || !Array.isArray(data)) return;
         const scoped = data.filter((row: any) => !row.profile_id || row.profile_id === activeProfile.id);
-        setWatchHistory(prev => {
-          const map = new Map<string, WatchHistoryEntry>();
-          for (const row of scoped) map.set(row.item_key, row);
-          for (const local of prev) {
-            const existing = map.get(local.item_key);
-            if (!existing || new Date(local.last_watched_at) > new Date(existing.last_watched_at)) {
-              map.set(local.item_key, local);
+        const localRows = readJsonStorage<WatchHistoryEntry[]>(historyKeyFor(activeProfile.id), []);
+        const map = new Map<string, WatchHistoryEntry>();
+        for (const row of scoped) map.set(row.item_key, row);
+        for (const local of localRows) {
+          const existing = map.get(local.item_key);
+          if (!existing || new Date(local.last_watched_at) > new Date(existing.last_watched_at)) {
+            map.set(local.item_key, local);
+            const upsertPayload: Record<string, unknown> = {
+              user_id: user.id,
+              item_key: local.item_key,
+              media_type: local.media_type,
+              tmdb_id: local.tmdb_id ?? null,
+              free_film_id: local.free_film_id ?? null,
+              title: local.title,
+              poster_path: local.poster_path ?? null,
+              progress_seconds: local.progress_seconds,
+              duration_seconds: local.duration_seconds,
+              completed: local.completed,
+              last_watched_at: local.last_watched_at
+            };
+            if (isUuid(activeProfile.id)) upsertPayload.profile_id = activeProfile.id;
+            const { error: upErr } = await client.from('watch_history').upsert(upsertPayload, { onConflict: 'user_id,item_key' });
+            if (upErr && upsertPayload.profile_id) {
+              delete upsertPayload.profile_id;
+              await client.from('watch_history').upsert(upsertPayload, { onConflict: 'user_id,item_key' });
             }
           }
-          const merged = Array.from(map.values())
-            .sort((a, b) => new Date(b.last_watched_at).getTime() - new Date(a.last_watched_at).getTime())
-            .slice(0, 30);
+        }
+        const merged = Array.from(map.values())
+          .sort((a, b) => new Date(b.last_watched_at).getTime() - new Date(a.last_watched_at).getTime())
+          .slice(0, 30);
+        if (!cancelled) {
+          setWatchHistory(merged);
           writeJsonStorage(historyKeyFor(activeProfile.id), merged);
-          return merged;
-        });
+        }
       }, () => {});
 
     return () => { cancelled = true; };
@@ -760,14 +854,20 @@ function App() {
       setSaved(next);
       writeJsonStorage(favoritesKeyFor(activeProfile.id), next);
     } else {
-      const { error: dbError } = await supabase.from('saved_titles').insert({
+      const insertPayload: Record<string, unknown> = {
         user_id: user.id,
         tmdb_id: item.id,
         media_type: item.media_type,
         title: title(item),
         poster_path: item.poster_path,
         vote_average: item.vote_average
-      });
+      };
+      if (isUuid(activeProfile.id)) insertPayload.profile_id = activeProfile.id;
+      let { error: dbError } = await supabase.from('saved_titles').insert(insertPayload);
+      if (dbError && insertPayload.profile_id) {
+        delete insertPayload.profile_id;
+        ({ error: dbError } = await supabase.from('saved_titles').insert(insertPayload));
+      }
       if (dbError) { setError(dbError.message); return; }
       const next = [item, ...saved];
       setSaved(next);
@@ -820,23 +920,47 @@ function App() {
     });
 
     if (user && dbClient) {
+      const upsertPayload: Record<string, unknown> = {
+        user_id: user.id,
+        item_key: entry.item_key,
+        media_type: entry.media_type,
+        tmdb_id: entry.tmdb_id,
+        free_film_id: entry.free_film_id,
+        title: entry.title,
+        poster_path: entry.poster_path,
+        progress_seconds: entry.progress_seconds,
+        duration_seconds: entry.duration_seconds,
+        completed: entry.completed,
+        last_watched_at: entry.last_watched_at
+      };
+      if (isUuid(activeProfile.id)) upsertPayload.profile_id = activeProfile.id;
       dbClient
         .from('watch_history')
+        .upsert(upsertPayload, { onConflict: 'user_id,item_key' })
+        .then(({ error: whErr }: any) => {
+          if (whErr && upsertPayload.profile_id) {
+            delete upsertPayload.profile_id;
+            dbClient.from('watch_history').upsert(upsertPayload, { onConflict: 'user_id,item_key' }).then(() => {}, () => {});
+          }
+        }, () => {});
+    }
+  }
+
+  function updateUserPreferences(prefs: { preferred_playback_speed?: number; preferred_subtitle_lang?: string }) {
+    if (typeof prefs.preferred_playback_speed === 'number') {
+      setPreferredPlaybackSpeed(prefs.preferred_playback_speed);
+      writeJsonStorage(prefsStorageKey, { preferred_playback_speed: prefs.preferred_playback_speed });
+    }
+    if (user && dbClient) {
+      dbClient
+        .from('user_preferences')
         .upsert(
           {
             user_id: user.id,
-            item_key: entry.item_key,
-            media_type: entry.media_type,
-            tmdb_id: entry.tmdb_id,
-            free_film_id: entry.free_film_id,
-            title: entry.title,
-            poster_path: entry.poster_path,
-            progress_seconds: entry.progress_seconds,
-            duration_seconds: entry.duration_seconds,
-            completed: entry.completed,
-            last_watched_at: entry.last_watched_at
+            preferred_playback_speed: prefs.preferred_playback_speed ?? preferredPlaybackSpeed,
+            updated_at: new Date().toISOString()
           },
-          { onConflict: 'user_id,item_key' }
+          { onConflict: 'user_id' }
         )
         .then(() => {}, () => {});
     }
@@ -1160,19 +1284,30 @@ function App() {
     if (!rating) { setReviewMessage('Choose a rating from 1 to 10.'); return; }
     if (!comment.trim()) { setReviewMessage('Add a comment before publishing.'); return; }
     setReviewBusy(true); setReviewMessage('');
-    const payload = {
+    const payload: Record<string, unknown> = {
       user_id: user.id,
       media_type: detail[1],
       tmdb_id: detailItem.id,
       title: title(detailItem),
       rating,
-      comment: comment.trim()
+      comment: comment.trim(),
+      author_name: activeProfile.name
     };
-    const { data, error: dbError } = await supabase
+    if (isUuid(activeProfile.id)) payload.profile_id = activeProfile.id;
+    let { data, error: dbError } = await supabase
       .from('title_reviews')
       .upsert(payload, { onConflict: 'user_id,media_type,tmdb_id' })
       .select()
       .single();
+    if (dbError && (payload.profile_id || payload.author_name)) {
+      delete payload.profile_id;
+      delete payload.author_name;
+      ({ data, error: dbError } = await supabase
+        .from('title_reviews')
+        .upsert(payload, { onConflict: 'user_id,media_type,tmdb_id' })
+        .select()
+        .single());
+    }
     setReviewBusy(false);
     if (dbError) { setReviewMessage(dbError.message); return; }
     setReviews(rows => [data, ...rows.filter(row => row.user_id !== user.id)]);
@@ -1231,22 +1366,38 @@ function App() {
     const freeMatch = type === 'movie' ? findFreeFilmMatch(film, allFreeFilms) : undefined;
     const animeBadge = isAnimeFilm(film);
     return (
-      <article className="card" key={`${type}-${film.id}`} onClick={() => go(`/${type}/${film.id}`)}>
+      <article
+        className="card"
+        key={`${type}-${film.id}`}
+        onClick={() => go(`/${type}/${film.id}`)}
+        onMouseMove={handleCardPointerMove}
+        onMouseLeave={handleCardPointerLeave}
+      >
         <div className="poster">
-          {film.poster_path ? <img src={img(film.poster_path)} loading="lazy" alt={title(film)} /> : <div className="posterEmpty"><Clapperboard /></div>}
+          {film.poster_path ? (
+            <img
+              src={img(film.poster_path)}
+              loading="lazy"
+              alt={title(film)}
+              onError={e => { e.currentTarget.style.display = 'none'; }}
+            />
+          ) : (
+            <div className="posterEmpty"><Clapperboard /></div>
+          )}
+          <div className="posterSheen" aria-hidden="true" />
           <div className="cardQuickActions">
             <button className="quickSave" aria-label={isSaved ? 'Remove from favorites' : 'Add to favorites'} title="My List" onClick={event => { event.stopPropagation(); toggleSaved(film, type); }}>
-              <Heart size={16} fill={isSaved ? 'currentColor' : 'none'} />
+              <Heart size={15} fill={isSaved ? 'currentColor' : 'none'} />
             </button>
             <button className="quickDownload" aria-label="Add to download queue" title="Download queue" onClick={event => { event.stopPropagation(); toggleDownload(film); }}>
-              <Download size={16} />
+              <Download size={15} />
             </button>
           </div>
           {freeMatch && <span className="streamTag">Full Movie</span>}
           {!freeMatch && animeBadge && <span className="streamTag animeTag">Anime</span>}
           <div className="posterShade">
             <span>{type === 'tv' ? 'Series' : 'Movie'}</span>
-            <b><Star size={13} fill="currentColor" /> {(film.vote_average || 0).toFixed(1)}</b>
+            <b><Star size={12} fill="currentColor" /> {(film.vote_average || 0).toFixed(1)}</b>
           </div>
         </div>
         <div className="cardTitle">{title(film)}</div>
@@ -1260,7 +1411,7 @@ function App() {
       <section className="shelf">
         <div className="shelfHead">
           <div><small>{eyebrowText}</small><h2>{label}</h2></div>
-          <button className="textBtn" onClick={() => go(to)}>See all <ChevronLeft size={16} /></button>
+          <button className="textBtn" onClick={() => go(to)}>See all <ChevronRight size={16} /></button>
         </div>
         <div className="row">
           {homeLoading && !items.length
@@ -1277,13 +1428,29 @@ function App() {
       <section className="shelf">
         <div className="shelfHead">
           <div><small>Verified public-domain streams</small><h2>{featuredConfig.curatedShelfTitle || 'Watch full movies free'}</h2></div>
-          <button className="textBtn" onClick={() => go('/free-films')}>Open player <ChevronLeft size={16} /></button>
+          <button className="textBtn" onClick={() => go('/free-films')}>Open player <ChevronRight size={16} /></button>
         </div>
         <div className="row">
           {verifiedFullFeatures.map(entry => (
-            <article className="card" key={entry.id} onClick={() => openFreeFilm(entry.id)}>
+            <article
+              className="card"
+              key={entry.id}
+              onClick={() => openFreeFilm(entry.id)}
+              onMouseMove={handleCardPointerMove}
+              onMouseLeave={handleCardPointerLeave}
+            >
               <div className="poster">
-                {entry.posterPath ? <img src={img(entry.posterPath)} loading="lazy" alt={entry.title} /> : <div className="posterEmpty"><Clapperboard /></div>}
+                {entry.posterPath ? (
+                  <img
+                    src={img(entry.posterPath)}
+                    loading="lazy"
+                    alt={entry.title}
+                    onError={e => { e.currentTarget.style.display = 'none'; }}
+                  />
+                ) : (
+                  <div className="posterEmpty"><Clapperboard /></div>
+                )}
+                <div className="posterSheen" aria-hidden="true" />
                 <span className="streamTag">Full Movie</span>
                 <div className="posterShade">
                   <span>{formatRuntime(entry.runtimeSeconds)}</span>
@@ -1304,7 +1471,7 @@ function App() {
       <section className="shelf">
         <div className="shelfHead">
           <div><small>Meet the talent</small><h2>Popular celebrities</h2></div>
-          <button className="textBtn" onClick={() => go('/celebrities')}>See all <ChevronLeft size={16} /></button>
+          <button className="textBtn" onClick={() => go('/celebrities')}>See all <ChevronRight size={16} /></button>
         </div>
         <div className="peopleRow">{people.slice(0, 10).map(personCard)}</div>
       </section>
@@ -1314,7 +1481,18 @@ function App() {
   function personCard(person: Person) {
     return (
       <button className="personCard" key={person.id} onClick={() => go(`/celebrity/${person.id}`)}>
-        <span className="personPortrait">{person.profile_path ? <img src={img(person.profile_path, 'w342')} loading="lazy" alt={person.name} /> : <UserRound />}</span>
+        <span className="personPortrait">
+          {person.profile_path ? (
+            <img
+              src={img(person.profile_path, 'w342')}
+              loading="lazy"
+              alt={person.name}
+              onError={e => { e.currentTarget.style.display = 'none'; }}
+            />
+          ) : (
+            <UserRound />
+          )}
+        </span>
         <b>{person.name}</b>
         <small>{person.character || person.known_for_department || 'Artist'}</small>
       </button>
@@ -1322,14 +1500,14 @@ function App() {
   }
 
   const navItems = [
-    { label: 'Home', to: '/', icon: null },
-    { label: 'Movies', to: '/movies', icon: null },
+    { label: 'Home', to: '/', icon: <Home size={14} /> },
+    { label: 'Movies', to: '/movies', icon: <FilmIcon size={14} /> },
     { label: 'Series', to: '/series', icon: <Tv size={14} /> },
     { label: 'Anime', to: '/anime', icon: <Sparkles size={14} /> },
     { label: 'Top 10', to: '/top-movies', icon: <Trophy size={14} /> },
     { label: 'Free Films', to: '/free-films', icon: <Play size={14} /> },
     { label: 'My List', to: '/my-list', icon: <Heart size={14} /> },
-    { label: 'Discover', to: '/discover', icon: null }
+    { label: 'Discover', to: '/discover', icon: <Compass size={14} /> }
   ];
 
   const activeNav = path === '/' ? '/' : path.startsWith('/movie') ? '/movies' : path.startsWith('/tv') ? '/series' : path;
@@ -1340,6 +1518,7 @@ function App() {
   const selectedProgress = watchHistory.find(h => h.free_film_id === selectedFreeFilm?.id || h.item_key === `free:${selectedFreeFilm?.id}`);
 
   const detailFreeMatch = detail && detail[1] === 'movie' && detailItem ? findFreeFilmMatch(detailItem, allFreeFilms) : undefined;
+  const detailShortMatch = detail && detail[1] === 'movie' && detailItem && !detailFreeMatch ? findFreeShortMatch(detailItem, allFreeFilms) : undefined;
   const hasExternalProviders = Boolean(
     watchProviders &&
     (watchProviders.flatrate.length > 0 || watchProviders.free.length > 0 || watchProviders.rent.length > 0 || watchProviders.buy.length > 0)
@@ -1624,7 +1803,7 @@ function App() {
           className="detailPage"
           style={{
             backgroundImage: detailItem?.backdrop_path
-              ? `linear-gradient(0deg,#071016 7%,rgba(7,16,22,.74) 52%,rgba(7,16,22,.22)),url(${img(detailItem.backdrop_path, 'original')})`
+              ? `linear-gradient(95deg,rgba(4,8,20,.94) 0%,rgba(4,8,20,.86) 56%,rgba(4,8,20,.68) 100%),linear-gradient(0deg,#040814 14%,rgba(4,8,20,.88) 60%,rgba(4,8,20,.62) 100%),url(${img(detailItem.backdrop_path, 'original')})`
               : ''
           }}
         >
@@ -1637,12 +1816,14 @@ function App() {
                 </div>
               )}
               <div className="detailContent">
-                <span className={`detailStreamBadge ${detailFreeMatch ? 'full' : hasExternalProviders ? 'external' : 'trailerOnly'}`}>
+                <span className={`detailStreamBadge ${detailFreeMatch ? 'full' : detailShortMatch ? 'short' : hasExternalProviders ? 'external' : 'trailerOnly'}`}>
                   {detailFreeMatch
                     ? <><Play size={12} fill="currentColor" /> Full Movie Available (Free Public-Domain Stream)</>
-                    : hasExternalProviders
-                      ? 'External Legal Streaming Provider Available'
-                      : 'Trailer and Information Only'}
+                    : detailShortMatch
+                      ? <><Play size={12} fill="currentColor" /> Open-License Short Available ({formatRuntime(detailShortMatch.runtimeSeconds)})</>
+                      : hasExternalProviders
+                        ? 'External Legal Streaming Provider Available'
+                        : 'Trailer and Information Only'}
                 </span>
                 <p className="eyebrow">
                   {isAnimeFilm(detailItem) ? 'Anime' : detail[1] === 'tv' ? 'TV Series' : 'Movie'} •{' '}
@@ -1679,6 +1860,11 @@ function App() {
                       <Play size={17} fill="currentColor" /> Play Full Movie
                     </button>
                   )}
+                  {detailShortMatch && (
+                    <button className="watchFullMovie" onClick={() => openFreeFilm(detailShortMatch.id)}>
+                      <Play size={17} fill="currentColor" /> Play Free Short
+                    </button>
+                  )}
                   <button className="primary" onClick={() => toggleSaved(detailItem, detail[1])}>
                     <Heart size={17} fill={isDetailSaved ? 'currentColor' : 'none'} /> {isDetailSaved ? 'In My List' : 'Add to My List'}
                   </button>
@@ -1695,7 +1881,9 @@ function App() {
                 <p className="notice">
                   {detailFreeMatch
                     ? `Verified full-length stream provided via ${detailFreeMatch.provider} (${detailFreeMatch.rightsLabel}).`
-                    : 'Aurora only enables Play when a verified full-length source is available. Official trailers below are promotional previews only.'}
+                    : detailShortMatch
+                      ? `Open-license short film provided via ${detailShortMatch.provider} (${detailShortMatch.rightsLabel}).`
+                      : 'Aurora only enables Play when a verified full-length source is available. Official trailers below are promotional previews only.'}
                 </p>
               </div>
             </div>
@@ -2086,6 +2274,8 @@ function App() {
                 savedProgressSeconds={selectedProgress?.progress_seconds || 0}
                 savedCompleted={selectedProgress?.completed || false}
                 autoResumeSeconds={autoResumeSeconds}
+                initialPlaybackRate={preferredPlaybackSpeed}
+                onPreferencesChange={updateUserPreferences}
                 onConsumeAutoResume={() => setAutoResumeSeconds(null)}
                 onProgress={(ct, dur, force) => recordWatchProgress(selectedFreeFilm, ct, dur, force)}
                 onPlayNext={nextId => openFreeFilm(nextId, 0)}
@@ -2423,76 +2613,102 @@ function App() {
             className="hero"
             style={{
               backgroundImage: hero?.backdrop_path
-                ? `linear-gradient(90deg,rgba(5,12,17,.95) 0%,rgba(5,12,17,.72) 40%,rgba(5,12,17,.12) 100%),linear-gradient(0deg,#071016 0%,transparent 35%),url(${img(hero.backdrop_path, 'original')})`
+                ? `linear-gradient(95deg,rgba(4,8,20,.96) 0%,rgba(4,8,20,.78) 44%,rgba(4,8,20,.28) 100%),linear-gradient(0deg,#040814 0%,transparent 42%),url(${img(hero.backdrop_path, 'original')})`
                 : ''
             }}
           >
-            <div className="auroraGlow" />
-            <div className="heroText">
-              <div className="eyebrow"><span className="liveDot" /> Featured for {activeProfile.name}</div>
-              <h1>{hero ? title(hero) : 'Your next night starts here'}</h1>
-              <div className="heroMeta">
-                <span><Star size={15} fill="currentColor" /> {(hero?.vote_average || 8.7).toFixed(1)}</span>
-                <span>{(hero?.release_date || hero?.first_air_date || '').slice(0, 4) || '2026'}</span>
-                <span>{hero?.media_type === 'tv' ? 'Series' : 'Movie'}</span>
-              </div>
-              <p>{hero?.overview || 'Discover stories that stay with you. A curated selection for tonight.'}</p>
-              <div className="heroBtns">
-                {heroFreeMatch ? (
-                  <button className="watchFullMovie" onClick={() => openFreeFilm(heroFreeMatch.id)}>
-                    <Play size={17} fill="currentColor" /> Play Full Movie
-                  </button>
-                ) : (
-                  <button className="primary" onClick={() => hero && go(`/${hero.media_type === 'tv' ? 'tv' : 'movie'}/${hero.id}`)}>
-                    <Play size={17} fill="currentColor" /> More Info &amp; Trailer
-                  </button>
-                )}
-                <button className="secondary" onClick={() => hero && toggleSaved(hero, hero.media_type || 'movie')}>
-                  <Heart size={17} /> Add to My List
-                </button>
-              </div>
-              <div className="heroControls">
-                <div className="heroCount">
-                  {String((heroIndex % Math.max(heroSlides.length, 1)) + 1).padStart(2, '0')} <i /> {String(Math.max(heroSlides.length, 1)).padStart(2, '0')}
-                </div>
-                {heroSlides.length > 1 && (
-                  <>
-                    <div className="heroDots" role="tablist" aria-label="Featured titles">
-                      {heroSlides.map((slide, idx) => (
-                        <button
-                          key={slide.id}
-                          aria-label={`Show featured title ${idx + 1}`}
-                          className={heroIndex % heroSlides.length === idx ? 'active' : ''}
-                          onClick={() => setHeroIndex(idx)}
-                        />
-                      ))}
-                    </div>
-                    <button
-                      className="heroArrow"
-                      aria-label="Previous featured title"
-                      onClick={() => setHeroIndex(i => (i - 1 + heroSlides.length) % heroSlides.length)}
-                    >
-                      <ChevronLeft size={15} />
-                    </button>
-                    <button
-                      className="heroArrow"
-                      aria-label="Next featured title"
-                      onClick={() => setHeroIndex(i => (i + 1) % heroSlides.length)}
-                    >
-                      <ChevronRight size={15} />
-                    </button>
-                  </>
-                )}
-              </div>
+            <div className="auroraCurtains" aria-hidden="true">
+              <span className="auroraRibbon ribbonA" />
+              <span className="auroraRibbon ribbonB" />
+              <span className="auroraRibbon ribbonC" />
             </div>
-            <div className="heroLogo"><span>◜</span> AURORA VIDEO</div>
+            <div className="heroInner">
+              <div className="heroText">
+                <div className="eyebrow"><Sparkles size={13} /> Featured for {activeProfile.name}</div>
+                <h1>{hero ? title(hero) : 'Your next night starts here'}</h1>
+                <div className="heroMeta">
+                  <span><Star size={14} fill="currentColor" /> {(hero?.vote_average || 8.7).toFixed(1)}</span>
+                  <span aria-hidden="true">·</span>
+                  <span>{(hero?.release_date || hero?.first_air_date || '').slice(0, 4) || '2026'}</span>
+                  <span aria-hidden="true">·</span>
+                  <span>{hero?.media_type === 'tv' ? 'Series' : 'Movie'}</span>
+                </div>
+                <p>{hero?.overview || 'Discover stories that stay with you. A curated selection for tonight.'}</p>
+                <div className="heroBtns">
+                  {heroFreeMatch ? (
+                    <button className="watchFullMovie" onClick={() => openFreeFilm(heroFreeMatch.id)}>
+                      <Play size={17} fill="currentColor" /> Play Full Movie
+                    </button>
+                  ) : (
+                    <button className="primary" onClick={() => hero && go(`/${hero.media_type === 'tv' ? 'tv' : 'movie'}/${hero.id}`)}>
+                      <Play size={17} fill="currentColor" /> More Info &amp; Trailer
+                    </button>
+                  )}
+                  <button className="secondary" onClick={() => hero && toggleSaved(hero, hero.media_type || 'movie')}>
+                    <Heart size={17} /> Add to My List
+                  </button>
+                </div>
+                <div className="heroControls">
+                  <div className="heroCount">
+                    {String((heroIndex % Math.max(heroSlides.length, 1)) + 1).padStart(2, '0')} <i /> {String(Math.max(heroSlides.length, 1)).padStart(2, '0')}
+                  </div>
+                  {heroSlides.length > 1 && (
+                    <>
+                      <div className="heroDots" role="tablist" aria-label="Featured titles">
+                        {heroSlides.map((slide, idx) => (
+                          <button
+                            key={slide.id}
+                            aria-label={`Show featured title ${idx + 1}`}
+                            className={heroIndex % heroSlides.length === idx ? 'active' : ''}
+                            onClick={() => setHeroIndex(idx)}
+                          />
+                        ))}
+                      </div>
+                      <button
+                        className="heroArrow"
+                        aria-label="Previous featured title"
+                        onClick={() => setHeroIndex(i => (i - 1 + heroSlides.length) % heroSlides.length)}
+                      >
+                        <ChevronLeft size={15} />
+                      </button>
+                      <button
+                        className="heroArrow"
+                        aria-label="Next featured title"
+                        onClick={() => setHeroIndex(i => (i + 1) % heroSlides.length)}
+                      >
+                        <ChevronRight size={15} />
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {hero?.poster_path && (
+                <div
+                  className="heroShowcase"
+                  onClick={() => hero && go(`/${hero.media_type === 'tv' ? 'tv' : 'movie'}/${hero.id}`)}
+                  onMouseMove={handleCardPointerMove}
+                  onMouseLeave={handleCardPointerLeave}
+                >
+                  <div className="heroPosterCard">
+                    <img src={img(hero.poster_path, 'w500')} alt={title(hero)} />
+                    <div className="posterSheen" aria-hidden="true" />
+                    <div className="heroPosterMeta">
+                      <small>{hero.media_type === 'tv' ? 'Series' : 'Feature'}</small>
+                      <b>{title(hero)}</b>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="heroLogo"><span>◜</span> AURORA CINEMA</div>
           </main>
 
           {watchHistory.some(item => item.free_film_id && item.progress_seconds >= 5 && !item.completed) && (
             <section className="shelf">
               <div className="shelfHead">
                 <div><small>Resume where you left off · {activeProfile.name}</small><h2>Continue watching</h2></div>
-                <button className="textBtn" onClick={() => go('/free-films')}>Free Films <ChevronLeft size={16} /></button>
+                <button className="textBtn" onClick={() => go('/free-films')}>Free Films <ChevronRight size={16} /></button>
               </div>
               <div className="historyGrid">
                 {watchHistory

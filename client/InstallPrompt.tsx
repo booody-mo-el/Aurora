@@ -59,7 +59,7 @@ export default function InstallPrompt() {
     if (!isInstalled()) {
       const dismissedUntil = Number(localStorage.getItem(DISMISS_KEY) || 0);
       if (dismissedUntil <= Date.now()) {
-        timer = window.setTimeout(() => setVisible(true), 2200);
+        timer = window.setTimeout(() => setVisible(true), 4500);
       }
       window.addEventListener('beforeinstallprompt', onBeforeInstall);
       window.addEventListener('appinstalled', onInstalled);

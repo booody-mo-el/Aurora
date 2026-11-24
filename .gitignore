@@ -10,3 +10,4 @@ dist-server/
 .DS_Store
 bun.lock
 workspace/
+data/

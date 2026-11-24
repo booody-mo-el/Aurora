@@ -25,6 +25,7 @@ export const baseFreeFilms: FreeFilm[] = [
     description: 'George A. Romero’s 1968 independently produced horror feature in a restored transfer.',
     itemUrl: 'https://archive.org/details/NightOfTheLivingDead1968-Restored',
     videoUrl: 'https://archive.org/download/NightOfTheLivingDead1968-Restored/Notld1968Restoration-desktop.mp4',
+    fallbackUrls: ['https://archive.org/download/NightOfTheLivingDead1968-Restored/Notld1968Restoration-desktop_512kb.mp4'],
     playerType: 'mp4',
     provider: 'Internet Archive',
     rightsLabel: 'Public Domain Mark 1.0 · Internet Archive item',
@@ -35,6 +36,8 @@ export const baseFreeFilms: FreeFilm[] = [
     completeness: 'complete',
     contentType: 'feature',
     sourceVerified: true,
+    streamCodec: 'avc1+mp4a',
+    moovPosition: 'start',
     availableQualities: ['480p MP4', '240p MP4'],
     qualitySources: [
       { label: '480p', url: 'https://archive.org/download/NightOfTheLivingDead1968-Restored/Notld1968Restoration-desktop.mp4' },
@@ -55,6 +58,7 @@ export const baseFreeFilms: FreeFilm[] = [
     description: 'Howard Hawks’ 1940 Columbia Pictures screwball comedy feature.',
     itemUrl: 'https://archive.org/details/HisGirlFriday',
     videoUrl: 'https://archive.org/download/HisGirlFriday/MoviePowderPresentsHisGirlFriday.mp4',
+    fallbackUrls: ['https://archive.org/download/HisGirlFriday/MoviePowderPresentsHisGirlFriday_512kb.mp4'],
     playerType: 'mp4',
     provider: 'Internet Archive',
     rightsLabel: 'Public Domain Mark · Internet Archive item',
@@ -65,6 +69,8 @@ export const baseFreeFilms: FreeFilm[] = [
     completeness: 'complete',
     contentType: 'feature',
     sourceVerified: true,
+    streamCodec: 'avc1+mp4a',
+    moovPosition: 'start',
     availableQualities: ['480p MP4', '240p MP4'],
     qualitySources: [
       { label: '480p', url: 'https://archive.org/download/HisGirlFriday/MoviePowderPresentsHisGirlFriday.mp4' },
@@ -82,6 +88,7 @@ export const baseFreeFilms: FreeFilm[] = [
     description: 'William Castle’s 1959 mystery horror classic starring Vincent Price.',
     itemUrl: 'https://archive.org/details/house_on_haunted_hill_ipod',
     videoUrl: 'https://archive.org/download/house_on_haunted_hill_ipod/house_on_haunted_hill.mp4',
+    fallbackUrls: ['https://archive.org/download/house_on_haunted_hill_ipod/house_on_haunted_hill_512kb.mp4'],
     playerType: 'mp4',
     provider: 'Internet Archive',
     rightsLabel: 'Public Domain Mark · Internet Archive item',
@@ -92,6 +99,8 @@ export const baseFreeFilms: FreeFilm[] = [
     completeness: 'complete',
     contentType: 'feature',
     sourceVerified: true,
+    streamCodec: 'avc1+mp4a',
+    moovPosition: 'start',
     availableQualities: ['480p MP4', '240p MP4'],
     qualitySources: [
       { label: '480p', url: 'https://archive.org/download/house_on_haunted_hill_ipod/house_on_haunted_hill.mp4' },
@@ -112,6 +121,7 @@ export const baseFreeFilms: FreeFilm[] = [
     description: 'Herk Harvey’s 1962 independent psychological horror feature.',
     itemUrl: 'https://archive.org/details/CarnivalofSouls',
     videoUrl: 'https://archive.org/download/CarnivalofSouls/CarnivalOfSouls.mp4',
+    fallbackUrls: ['https://archive.org/download/CarnivalofSouls/CarnivalOfSouls_512kb.mp4'],
     playerType: 'mp4',
     provider: 'Internet Archive',
     rightsLabel: 'Public Domain Mark · Internet Archive item',
@@ -122,6 +132,8 @@ export const baseFreeFilms: FreeFilm[] = [
     completeness: 'complete',
     contentType: 'feature',
     sourceVerified: true,
+    streamCodec: 'avc1+mp4a',
+    moovPosition: 'start',
     availableQualities: ['480p MP4', '240p MP4'],
     qualitySources: [
       { label: '480p', url: 'https://archive.org/download/CarnivalofSouls/CarnivalOfSouls.mp4' },
@@ -139,25 +151,68 @@ export const baseFreeFilms: FreeFilm[] = [
     posterPath: '/o7LI2NQ0KtDaVaIYYhZ9PHFDV37.jpg',
     title: 'The Giant Gila Monster',
     year: 1959,
-    description: 'Ray Kellogg’s 1959 public-domain creature feature.',
-    itemUrl: 'https://archive.org/details/TheGiantGilaMonsterWidescreenQualityUpgrade',
-    videoUrl: 'https://archive.org/download/TheGiantGilaMonsterWidescreenQualityUpgrade/THE%20GIANT%20GILA%20MONSTER.mp4',
+    description: 'Ray Kellogg’s 1959 public-domain creature feature in H.264/AAC browser-compatible transfers.',
+    itemUrl: 'https://archive.org/details/giant-gila-monster_202508',
+    videoUrl: 'https://archive.org/download/giant-gila-monster_202508/Giant%20Gila%20Monster.ia.mp4',
+    fallbackUrls: [
+      'https://archive.org/download/giant_gila_monster/giant_gila_monster.mp4',
+      'https://archive.org/download/the-giant-gila-monster-1959/The%20Giant%20Gila%20Monster%20(1959).ia.mp4',
+      'https://archive.org/download/giant_gila_monster/giant_gila_monster_512kb.mp4'
+    ],
     playerType: 'mp4',
     provider: 'Internet Archive',
     rightsLabel: 'Public Domain Mark 1.0 · Internet Archive item',
     rightsUrl: 'https://creativecommons.org/publicdomain/mark/1.0/',
-    rightsNote: 'The Internet Archive item identifies this widescreen theatrical print with Public Domain Mark 1.0 and lists a complete runtime of 1:14:42. Territorial restrictions may still apply outside the United States.',
-    attribution: 'The Giant Gila Monster (1959), Ray Kellogg. Widescreen quality upgrade from the linked Internet Archive item.',
-    runtimeSeconds: 4482,
+    rightsNote: 'The linked Internet Archive items carry Public Domain Mark 1.0 / Public Domain status with a complete 74-minute runtime in browser-compatible H.264/AAC FastStart MP4 encodings. Territorial restrictions may still apply outside the United States.',
+    attribution: 'The Giant Gila Monster (1959), Ray Kellogg. Verified H.264/AAC public-domain transfers from Internet Archive.',
+    runtimeSeconds: 4466,
     completeness: 'complete',
     contentType: 'feature',
     sourceVerified: true,
-    availableQualities: ['406p MP4'],
+    streamCodec: 'avc1+mp4a',
+    moovPosition: 'start',
+    availableQualities: ['478p MP4', '1080p MP4', '360p MP4', '240p MP4'],
+    qualitySources: [
+      { label: '478p (Recommended)', url: 'https://archive.org/download/giant-gila-monster_202508/Giant%20Gila%20Monster.ia.mp4' },
+      { label: '1080p HD', url: 'https://archive.org/download/the-giant-gila-monster-1959/The%20Giant%20Gila%20Monster%20(1959).ia.mp4' },
+      { label: '360p', url: 'https://archive.org/download/giant_gila_monster/giant_gila_monster.mp4' },
+      { label: '240p', url: 'https://archive.org/download/giant_gila_monster/giant_gila_monster_512kb.mp4' }
+    ],
     subtitles: [
-      { label: 'English (Auto-captions)', lang: 'en', url: 'https://archive.org/download/TheGiantGilaMonsterWidescreenQualityUpgrade/TheGiantGilaMonsterWidescreenQualityUpgrade.asr.srt' }
+      { label: 'English (Auto-captions)', lang: 'en', url: 'https://archive.org/download/giant_gila_monster/giant_gila_monster.asr.srt' }
     ],
     countryRestrictions: ['Territorial rights should be verified'],
-    excerpts: [{ label: 'Opening', start: 0, end: 30 }, { label: 'Midpoint', start: 2241, end: 2271 }, { label: 'Finale', start: 4410, end: 4440 }]
+    excerpts: [{ label: 'Opening', start: 0, end: 30 }, { label: 'Midpoint', start: 2233, end: 2263 }, { label: 'Finale', start: 4400, end: 4430 }]
+  },
+  {
+    id: 'big-buck-bunny-2008',
+    tmdbId: 10378,
+    posterPath: '/i9jJzvoXET4D9pOkoEwncSdNNER.jpg',
+    title: 'Big Buck Bunny',
+    year: 2008,
+    description: 'Blender Foundation’s 2008 open-movie animated comedy short in adaptive multi-bitrate HLS.',
+    itemUrl: 'https://peach.blender.org/',
+    videoUrl: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
+    fallbackUrls: ['https://archive.org/download/BigBuckBunny_328/BigBuckBunny_512kb.mp4'],
+    playerType: 'hls',
+    provider: 'Blender Foundation / Mux Open Stream',
+    rightsLabel: 'CC BY 3.0 · Blender Foundation',
+    rightsUrl: 'https://creativecommons.org/licenses/by/3.0/',
+    rightsNote: 'Released by the Blender Foundation (Peach Open Movie Project) under Creative Commons Attribution 3.0.',
+    attribution: '(c) copyright 2008, Blender Foundation / www.bigbuckbunny.org (CC BY 3.0).',
+    runtimeSeconds: 596,
+    completeness: 'complete',
+    contentType: 'short',
+    sourceVerified: true,
+    streamCodec: 'avc1+mp4a (HLS)',
+    moovPosition: 'start',
+    availableQualities: ['Adaptive HLS (720p/480p/380p/240p)', '240p MP4 Mirror'],
+    qualitySources: [
+      { label: 'Adaptive HLS (.m3u8)', url: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8' },
+      { label: '240p MP4 Mirror', url: 'https://archive.org/download/BigBuckBunny_328/BigBuckBunny_512kb.mp4' }
+    ],
+    countryRestrictions: [],
+    excerpts: [{ label: 'Opening', start: 0, end: 30 }, { label: 'The Meadow', start: 240, end: 270 }, { label: 'Finale', start: 540, end: 570 }]
   },
   {
     id: 'trip-to-the-moon',
@@ -166,18 +221,25 @@ export const baseFreeFilms: FreeFilm[] = [
     description: 'A historical silent short by Georges Méliès.',
     itemUrl: 'https://archive.org/details/ATripToTheMoon20Fps',
     videoUrl: 'https://archive.org/download/ATripToTheMoon20Fps/TripToTheMoon20Fps_512kb.mp4',
+    fallbackUrls: ['https://archive.org/download/ATripToTheMoon20Fps/TripToTheMoon20Fps.mp4'],
     playerType: 'mp4',
     provider: 'Internet Archive',
     rightsLabel: 'CC BY 3.0 · uploader-declared',
     rightsUrl: 'https://creativecommons.org/licenses/by/3.0/',
     rightsNote: 'The linked Internet Archive item declares CC BY 3.0 for this 20 fps version. Confirm the rights in your territory before reuse.',
     attribution: 'A Trip to the Moon (1902), directed by Georges Méliès. 20 fps version from the linked Internet Archive item; uploader-declared CC BY 3.0.',
-    runtimeSeconds: 501,
+    runtimeSeconds: 678,
     completeness: 'complete',
     contentType: 'short',
-    sourceVerified: false,
-    availableQualities: ['Source copy — quality not verified'],
-    excerpts: [{ label: 'Opening', start: 0, end: 30 }, { label: 'The lunar journey', start: 180, end: 210 }, { label: 'The return', start: 450, end: 480 }]
+    sourceVerified: true,
+    streamCodec: 'avc1+mp4a',
+    moovPosition: 'start',
+    availableQualities: ['240p MP4 (FastStart)', '480p MP4'],
+    qualitySources: [
+      { label: '240p (FastStart)', url: 'https://archive.org/download/ATripToTheMoon20Fps/TripToTheMoon20Fps_512kb.mp4' },
+      { label: '480p', url: 'https://archive.org/download/ATripToTheMoon20Fps/TripToTheMoon20Fps.mp4' }
+    ],
+    excerpts: [{ label: 'Opening', start: 0, end: 30 }, { label: 'The lunar journey', start: 300, end: 330 }, { label: 'The return', start: 630, end: 660 }]
   },
   {
     id: 'great-train-robbery',
@@ -186,6 +248,7 @@ export const baseFreeFilms: FreeFilm[] = [
     description: 'An early silent film held as a historical motion-picture copy by the Library of Congress.',
     itemUrl: 'https://www.loc.gov/item/00694220/',
     videoUrl: 'https://tile.loc.gov/storage-services/service/mbrs/ntscrm/00000765/00000765.mp4',
+    fallbackUrls: ['https://archive.org/download/TheGreatTrainRobbery1903/TheGreatTrainRobbery1903.mp4'],
     playerType: 'mp4',
     provider: 'Library of Congress',
     rightsLabel: 'Rights status and copy completeness require verification',
@@ -196,7 +259,13 @@ export const baseFreeFilms: FreeFilm[] = [
     completeness: 'incomplete',
     contentType: 'short',
     sourceVerified: false,
-    availableQualities: ['Source copy — quality not verified'],
+    streamCodec: 'avc1+mp4a',
+    moovPosition: 'end',
+    availableQualities: ['LOC Archival MP4', 'Archive.org FastStart Mirror'],
+    qualitySources: [
+      { label: 'LOC Archival MP4', url: 'https://tile.loc.gov/storage-services/service/mbrs/ntscrm/00000765/00000765.mp4' },
+      { label: '480p Mirror (FastStart)', url: 'https://archive.org/download/TheGreatTrainRobbery1903/TheGreatTrainRobbery1903.mp4' }
+    ],
     excerpts: [{ label: 'Opening', start: 0, end: 30 }, { label: 'The train', start: 300, end: 330 }, { label: 'Finale', start: 660, end: 690 }]
   },
   {
@@ -216,7 +285,9 @@ export const baseFreeFilms: FreeFilm[] = [
     completeness: 'complete',
     contentType: 'short',
     sourceVerified: false,
-    availableQualities: ['Source copy — quality not verified'],
+    streamCodec: 'avc1+mp4a',
+    moovPosition: 'end',
+    availableQualities: ['LOC Archival MP4'],
     excerpts: [{ label: 'Excerpt 1', start: 0, end: 8 }, { label: 'Excerpt 2', start: 8, end: 18 }, { label: 'Excerpt 3', start: 18, end: 29 }]
   },
   {
@@ -236,7 +307,9 @@ export const baseFreeFilms: FreeFilm[] = [
     completeness: 'complete',
     contentType: 'short',
     sourceVerified: false,
-    availableQualities: ['Source copy — quality not verified'],
+    streamCodec: 'avc1+mp4a',
+    moovPosition: 'end',
+    availableQualities: ['LOC Archival MP4'],
     excerpts: [{ label: 'Opening', start: 0, end: 12 }, { label: 'The ceremony', start: 12, end: 28 }, { label: 'Closing', start: 28, end: 43 }]
   },
   {
@@ -256,7 +329,9 @@ export const baseFreeFilms: FreeFilm[] = [
     completeness: 'complete',
     contentType: 'short',
     sourceVerified: false,
-    availableQualities: ['Source copy — quality not verified'],
+    streamCodec: 'avc1+mp4a',
+    moovPosition: 'end',
+    availableQualities: ['LOC Archival MP4'],
     excerpts: [{ label: 'Opening', start: 0, end: 30 }, { label: 'Ruins', start: 300, end: 330 }, { label: 'The city', start: 660, end: 690 }]
   },
   {
@@ -276,7 +351,9 @@ export const baseFreeFilms: FreeFilm[] = [
     completeness: 'complete',
     contentType: 'short',
     sourceVerified: false,
-    availableQualities: ['Source copy — quality not verified'],
+    streamCodec: 'avc1+mp4a',
+    moovPosition: 'end',
+    availableQualities: ['LOC Archival MP4'],
     excerpts: [{ label: 'Opening', start: 0, end: 30 }, { label: 'Factory aisle', start: 80, end: 110 }, { label: 'Closing', start: 170, end: 200 }]
   }
 ];
@@ -337,6 +414,25 @@ export function findFreeFilmMatch(film: Film | null | undefined, allFilms: FreeF
   if (!/^\d{4}$/.test(filmYear)) return undefined;
 
   return verified.find(entry =>
+    normalizeTitle(entry.title) === normalizeTitle(title(film)) &&
+    filmYear === String(entry.year)
+  );
+}
+
+export function findFreeShortMatch(film: Film | null | undefined, allFilms: FreeFilm[] = baseFreeFilms): FreeFilm | undefined {
+  if (!film || (film.media_type && film.media_type !== 'movie')) return undefined;
+  const shorts = allFilms.filter(
+    entry =>
+      validateFreeFilmCatalogEntry(entry) &&
+      entry.sourceVerified &&
+      entry.contentType === 'short' &&
+      isHttpUrl(entry.videoUrl)
+  );
+  const byId = shorts.find(entry => entry.tmdbId && entry.tmdbId === film.id);
+  if (byId) return byId;
+  const filmYear = (film.release_date || '').slice(0, 4);
+  if (!/^\d{4}$/.test(filmYear)) return undefined;
+  return shorts.find(entry =>
     normalizeTitle(entry.title) === normalizeTitle(title(film)) &&
     filmYear === String(entry.year)
   );

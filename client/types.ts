@@ -102,6 +102,7 @@ export type FreeFilm = {
   description: string;
   itemUrl: string;
   videoUrl?: string;
+  fallbackUrls?: string[];
   playerType?: 'mp4' | 'hls' | 'embed';
   embedUrl?: string;
   provider: string;
@@ -113,6 +114,8 @@ export type FreeFilm = {
   completeness: 'complete' | 'incomplete';
   contentType: 'feature' | 'short';
   sourceVerified: boolean;
+  streamCodec?: string;
+  moovPosition?: 'start' | 'end';
   availableQualities: string[];
   qualitySources?: QualityVariant[];
   subtitles?: SubtitleTrack[];
@@ -127,6 +130,9 @@ export type SourceProbe = {
   contentType?: string;
   contentLength?: number;
   acceptRanges?: string;
+  rangeSupported?: boolean;
+  signature?: string;
+  error?: string;
 };
 
 export type Profile = {

@@ -1,5 +1,6 @@
 import express from 'express';
 import crypto from 'node:crypto';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -16,6 +17,10 @@ function normalizeSupabaseUrl(raw: string | undefined): string {
 
 const supabaseUrl = normalizeSupabaseUrl(process.env.SUPABASE_URL);
 const supabaseAnonKey = (process.env.SUPABASE_ANON_KEY || '').trim();
+const supabaseServiceRoleKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+const dataFilePath = process.env.AURORA_DATA_FILE
+  ? path.resolve(process.env.AURORA_DATA_FILE)
+  : path.resolve(__dirname, '../data/aurora-store.json');
 
 const envAdminSessionSecret = (process.env.ADMIN_SESSION_SECRET || '').trim();
 const envAdminPasscode = (process.env.ADMIN_PASSCODE || '').trim();
@@ -212,13 +217,50 @@ function isAllowedMediaHost(rawUrl: string): boolean {
     const parsed = new URL(rawUrl);
     const host = parsed.hostname.toLowerCase();
     if (parsed.protocol !== 'https:') return false;
-    return host === 'archive.org' || host.endsWith('.archive.org') || host === 'tile.loc.gov';
+    return (
+      host === 'archive.org' ||
+      host.endsWith('.archive.org') ||
+      host === 'tile.loc.gov' ||
+      host === 'test-streams.mux.dev' ||
+      host === 'download.blender.org'
+    );
   } catch {
     return false;
   }
 }
 
-// Lightweight server-side store for admin-curated sources, featured config, reports, and analytics
+function isSafeHttpUrl(rawUrl: string): boolean {
+  try {
+    const parsed = new URL(rawUrl);
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:';
+  } catch {
+    return false;
+  }
+}
+
+function sanitizePosterPath(raw: unknown): string | undefined {
+  if (typeof raw !== 'string') return undefined;
+  const val = raw.trim();
+  if (!val) return undefined;
+  if (val.startsWith('/') && !val.startsWith('//') && /^\/[a-zA-Z0-9_.\-/]+$/.test(val)) return val;
+  if (val.startsWith('https://image.tmdb.org/')) return val;
+  return undefined;
+}
+
+const reportAttempts = new Map<string, { count: number; resetAt: number }>();
+function checkReportRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const entry = reportAttempts.get(ip);
+  if (!entry || entry.resetAt <= now) {
+    reportAttempts.set(ip, { count: 1, resetAt: now + 15 * 60 * 1000 });
+    return true;
+  }
+  if (entry.count >= 10) return false;
+  entry.count += 1;
+  return true;
+}
+
+// Persistent store for admin-curated sources, featured config, reports, and analytics
 type AdminCuratedSource = {
   id: string;
   tmdbId?: number;
@@ -227,6 +269,8 @@ type AdminCuratedSource = {
   description: string;
   itemUrl: string;
   videoUrl: string;
+  fallbackUrls?: string[];
+  qualitySources?: { label: string; url: string }[];
   playerType: 'mp4' | 'hls' | 'embed';
   provider: string;
   rightsLabel: string;
@@ -234,6 +278,7 @@ type AdminCuratedSource = {
   rightsNote: string;
   attribution: string;
   runtimeSeconds: number;
+  completeness?: 'complete' | 'incomplete';
   contentType: 'feature' | 'short';
   posterPath?: string;
   subtitles?: { label: string; lang: string; url: string }[];
@@ -252,36 +297,325 @@ type ContentReportRecord = {
   createdAt: string;
 };
 
-const adminSources: AdminCuratedSource[] = [];
-const contentReports: ContentReportRecord[] = [];
-let featuredConfig: {
+type FeaturedConfig = {
   heroTmdbIds: number[];
   curatedShelfTitle: string;
   disabledSourceIds: string[];
-} = {
+};
+
+type AnalyticsCounters = {
+  playbackStarts: number;
+  playbackCompletions: number;
+  searches: number;
+  detailViews: number;
+  recentEvents: { type: string; label: string; at: string }[];
+};
+
+type StoreSnapshot = {
+  adminSources: AdminCuratedSource[];
+  contentReports: ContentReportRecord[];
+  featuredConfig: FeaturedConfig;
+  analyticsCounters: AnalyticsCounters;
+};
+
+let adminSources: AdminCuratedSource[] = [];
+let contentReports: ContentReportRecord[] = [];
+let featuredConfig: FeaturedConfig = {
   heroTmdbIds: [],
   curatedShelfTitle: 'Watch full movies free',
   disabledSourceIds: []
 };
-
-const analyticsCounters = {
+let analyticsCounters: AnalyticsCounters = {
   playbackStarts: 0,
   playbackCompletions: 0,
   searches: 0,
   detailViews: 0,
-  recentEvents: [] as { type: string; label: string; at: string }[]
+  recentEvents: []
 };
+let supabaseTablesReady = false;
+
+function loadStoreFromDisk() {
+  try {
+    if (!fs.existsSync(dataFilePath)) return;
+    const raw = fs.readFileSync(dataFilePath, 'utf8');
+    const parsed = JSON.parse(raw) as Partial<StoreSnapshot>;
+    if (Array.isArray(parsed.adminSources)) adminSources = parsed.adminSources;
+    if (Array.isArray(parsed.contentReports)) contentReports = parsed.contentReports;
+    if (parsed.featuredConfig && typeof parsed.featuredConfig === 'object') {
+      featuredConfig = {
+        heroTmdbIds: Array.isArray(parsed.featuredConfig.heroTmdbIds) ? parsed.featuredConfig.heroTmdbIds : [],
+        curatedShelfTitle: typeof parsed.featuredConfig.curatedShelfTitle === 'string' && parsed.featuredConfig.curatedShelfTitle
+          ? parsed.featuredConfig.curatedShelfTitle
+          : 'Watch full movies free',
+        disabledSourceIds: Array.isArray(parsed.featuredConfig.disabledSourceIds) ? parsed.featuredConfig.disabledSourceIds : []
+      };
+    }
+    if (parsed.analyticsCounters && typeof parsed.analyticsCounters === 'object') {
+      analyticsCounters = {
+        playbackStarts: Number(parsed.analyticsCounters.playbackStarts) || 0,
+        playbackCompletions: Number(parsed.analyticsCounters.playbackCompletions) || 0,
+        searches: Number(parsed.analyticsCounters.searches) || 0,
+        detailViews: Number(parsed.analyticsCounters.detailViews) || 0,
+        recentEvents: Array.isArray(parsed.analyticsCounters.recentEvents) ? parsed.analyticsCounters.recentEvents.slice(0, 25) : []
+      };
+    }
+  } catch (err) {
+    console.warn('Could not load Aurora local persistent store:', err instanceof Error ? err.message : 'unknown error');
+  }
+}
+
+function saveStoreToDisk() {
+  try {
+    const dir = path.dirname(dataFilePath);
+    fs.mkdirSync(dir, { recursive: true });
+    const tmpPath = `${dataFilePath}.tmp`;
+    const snapshot: StoreSnapshot = {
+      adminSources,
+      contentReports,
+      featuredConfig,
+      analyticsCounters
+    };
+    fs.writeFileSync(tmpPath, JSON.stringify(snapshot, null, 2), 'utf8');
+    fs.renameSync(tmpPath, dataFilePath);
+  } catch (err) {
+    console.warn('Could not save Aurora local persistent store:', err instanceof Error ? err.message : 'unknown error');
+  }
+}
+
+async function sbAdminFetch(restPath: string, init: RequestInit = {}) {
+  if (!supabaseUrl || !supabaseServiceRoleKey) return null;
+  const headers = new Headers(init.headers);
+  headers.set('apikey', supabaseServiceRoleKey);
+  headers.set('Authorization', `Bearer ${supabaseServiceRoleKey}`);
+  if (init.body && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
+  return fetch(`${supabaseUrl}/rest/v1/${restPath}`, {
+    ...init,
+    headers,
+    signal: AbortSignal.timeout(6000)
+  });
+}
+
+async function hydrateStoreFromSupabase() {
+  if (!supabaseUrl || !supabaseServiceRoleKey) return;
+  try {
+    const [srcRes, setRes, repRes, anaRes] = await Promise.all([
+      sbAdminFetch('curated_sources?select=*&order=updated_at.desc'),
+      sbAdminFetch('site_settings?key=eq.featured_config&select=value'),
+      sbAdminFetch('content_reports?select=*&order=created_at.desc&limit=200'),
+      sbAdminFetch('analytics_counters?id=eq.global&select=*')
+    ]);
+    if (srcRes?.ok) {
+      supabaseTablesReady = true;
+      const rows = (await srcRes.json()) as any[];
+      if (Array.isArray(rows) && rows.length > 0) {
+        adminSources = rows.map(r => ({
+          id: r.id,
+          tmdbId: r.tmdb_id ?? undefined,
+          title: r.title,
+          year: r.year,
+          description: r.description,
+          itemUrl: r.item_url,
+          videoUrl: r.video_url,
+          fallbackUrls: Array.isArray(r.fallback_urls) ? r.fallback_urls : [],
+          qualitySources: Array.isArray(r.quality_sources) ? r.quality_sources : [],
+          playerType: r.stream_type || 'mp4',
+          provider: r.provider,
+          rightsLabel: r.rights_label,
+          rightsUrl: r.rights_url,
+          rightsNote: r.rights_note,
+          attribution: r.attribution,
+          runtimeSeconds: r.runtime_seconds,
+          completeness: r.completeness === 'incomplete' ? 'incomplete' : 'complete',
+          contentType: r.content_type || 'feature',
+          posterPath: r.poster_path ?? undefined,
+          subtitles: Array.isArray(r.subtitles) ? r.subtitles : [],
+          featured: Boolean(r.featured),
+          active: r.active !== false,
+          updatedAt: r.updated_at || new Date().toISOString()
+        }));
+      }
+    }
+    if (setRes?.ok) {
+      const rows = (await setRes.json()) as any[];
+      if (Array.isArray(rows) && rows[0]?.value) {
+        const val = rows[0].value;
+        featuredConfig = {
+          heroTmdbIds: Array.isArray(val.heroTmdbIds) ? val.heroTmdbIds : [],
+          curatedShelfTitle: typeof val.curatedShelfTitle === 'string' && val.curatedShelfTitle ? val.curatedShelfTitle : 'Watch full movies free',
+          disabledSourceIds: Array.isArray(val.disabledSourceIds) ? val.disabledSourceIds : []
+        };
+      }
+    }
+    if (repRes?.ok) {
+      const rows = (await repRes.json()) as any[];
+      if (Array.isArray(rows) && rows.length > 0) {
+        contentReports = rows.map(r => ({
+          id: String(r.id),
+          targetType: r.target_type,
+          targetId: r.target_id,
+          reason: r.reason,
+          reporter: r.reporter_label || r.reporter_id || 'guest',
+          status: r.status || 'open',
+          createdAt: r.created_at || new Date().toISOString()
+        }));
+      }
+    }
+    if (anaRes?.ok) {
+      const rows = (await anaRes.json()) as any[];
+      if (Array.isArray(rows) && rows[0]) {
+        const a = rows[0];
+        analyticsCounters = {
+          playbackStarts: Number(a.playback_starts) || 0,
+          playbackCompletions: Number(a.playback_completions) || 0,
+          searches: Number(a.searches) || 0,
+          detailViews: Number(a.detail_views) || 0,
+          recentEvents: Array.isArray(a.recent_events) ? a.recent_events.slice(0, 25) : []
+        };
+      }
+    }
+    saveStoreToDisk();
+  } catch {
+    // Keep local persistent store if Supabase schema is not yet applied
+  }
+}
+
+async function syncSourceToSupabase(record: AdminCuratedSource) {
+  if (!supabaseUrl || !supabaseServiceRoleKey) return;
+  try {
+    const r = await sbAdminFetch('curated_sources?on_conflict=id', {
+      method: 'POST',
+      headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({
+        id: record.id,
+        tmdb_id: record.tmdbId ?? null,
+        title: record.title,
+        year: record.year,
+        description: record.description,
+        item_url: record.itemUrl,
+        video_url: record.videoUrl,
+        stream_type: record.playerType,
+        provider: record.provider,
+        rights_label: record.rightsLabel,
+        rights_url: record.rightsUrl,
+        rights_note: record.rightsNote,
+        attribution: record.attribution,
+        runtime_seconds: record.runtimeSeconds,
+        content_type: record.contentType,
+        poster_path: record.posterPath ?? null,
+        subtitles: record.subtitles ?? [],
+        fallback_urls: record.fallbackUrls ?? [],
+        quality_sources: record.qualitySources ?? [],
+        completeness: record.completeness ?? 'complete',
+        source_verified: true,
+        featured: Boolean(record.featured),
+        active: record.active,
+        updated_at: record.updatedAt
+      })
+    });
+    if (r?.ok) supabaseTablesReady = true;
+  } catch {}
+}
+
+async function deleteSourceFromSupabase(id: string) {
+  if (!supabaseUrl || !supabaseServiceRoleKey) return;
+  try {
+    await sbAdminFetch(`curated_sources?id=eq.${encodeURIComponent(id)}`, { method: 'DELETE' });
+  } catch {}
+}
+
+async function syncFeaturedToSupabase() {
+  if (!supabaseUrl || !supabaseServiceRoleKey) return;
+  try {
+    const r = await sbAdminFetch('site_settings?on_conflict=key', {
+      method: 'POST',
+      headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({
+        key: 'featured_config',
+        value: featuredConfig,
+        updated_at: new Date().toISOString()
+      })
+    });
+    if (r?.ok) supabaseTablesReady = true;
+  } catch {}
+}
+
+async function syncAnalyticsToSupabase() {
+  if (!supabaseUrl || !supabaseServiceRoleKey) return;
+  try {
+    await sbAdminFetch('analytics_counters?on_conflict=id', {
+      method: 'POST',
+      headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({
+        id: 'global',
+        playback_starts: analyticsCounters.playbackStarts,
+        playback_completions: analyticsCounters.playbackCompletions,
+        searches: analyticsCounters.searches,
+        detail_views: analyticsCounters.detailViews,
+        recent_events: analyticsCounters.recentEvents,
+        updated_at: new Date().toISOString()
+      })
+    });
+  } catch {}
+}
+
+async function insertReportToSupabase(report: ContentReportRecord): Promise<ContentReportRecord> {
+  if (!supabaseUrl || !supabaseServiceRoleKey) return report;
+  try {
+    const r = await sbAdminFetch('content_reports', {
+      method: 'POST',
+      headers: { Prefer: 'return=representation' },
+      body: JSON.stringify({
+        reporter_label: report.reporter,
+        target_type: report.targetType,
+        target_id: report.targetId,
+        reason: report.reason,
+        status: report.status
+      })
+    });
+    if (r?.ok) {
+      supabaseTablesReady = true;
+      const rows = (await r.json()) as any[];
+      if (Array.isArray(rows) && rows[0]?.id !== undefined) {
+        return { ...report, id: String(rows[0].id), createdAt: rows[0].created_at || report.createdAt };
+      }
+    }
+  } catch {}
+  return report;
+}
+
+async function updateReportInSupabase(id: string, status: ContentReportRecord['status']) {
+  if (!supabaseUrl || !supabaseServiceRoleKey || !/^\d+$/.test(id)) return;
+  try {
+    await sbAdminFetch(`content_reports?id=eq.${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status })
+    });
+  } catch {}
+}
+
+loadStoreFromDisk();
 
 // In-memory TMDB response cache (5 minute TTL, max 200 entries)
 const tmdbCache = new Map<string, { expires: number; status: number; body: any }>();
 
+app.disable('x-powered-by');
+app.use((_req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  next();
+});
 app.use(express.json({ limit: '256kb' }));
 
 app.get('/api/health', (_req, res) =>
   res.json({
     ok: true,
     tmdbConfigured: Boolean(token),
-    supabaseConfigured: Boolean(supabaseUrl && supabaseAnonKey)
+    supabaseConfigured: Boolean(supabaseUrl && supabaseAnonKey),
+    persistenceMode: supabaseUrl && supabaseServiceRoleKey && supabaseTablesReady ? 'supabase+disk' : 'disk'
   })
 );
 
@@ -311,20 +645,27 @@ app.post('/api/analytics/event', (req, res) => {
       { type, label, at: new Date().toISOString() },
       ...analyticsCounters.recentEvents
     ].slice(0, 25);
+    saveStoreToDisk();
+    void syncAnalyticsToSupabase();
   }
   res.json({ ok: true });
 });
 
-app.post('/api/reports', (req, res) => {
+app.post('/api/reports', async (req, res) => {
+  const ip = getClientIp(req);
+  if (!checkReportRateLimit(ip)) {
+    res.status(429).json({ error: 'Too many reports submitted. Please try again later.' });
+    return;
+  }
   const targetType = req.body?.targetType;
   const targetId = typeof req.body?.targetId === 'string' ? req.body.targetId.trim().slice(0, 120) : '';
   const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim().slice(0, 500) : '';
-  const reporter = typeof req.body?.reporter === 'string' ? req.body.reporter.trim().slice(0, 120) : 'guest';
+  const reporter = typeof req.body?.reporter === 'string' && req.body.reporter.trim() ? req.body.reporter.trim().slice(0, 120) : 'guest';
   if (!['title', 'review', 'source'].includes(targetType) || !targetId || reason.length < 3) {
     res.status(400).json({ error: 'Valid targetType, targetId, and reason (min 3 chars) are required' });
     return;
   }
-  const report: ContentReportRecord = {
+  const initialReport: ContentReportRecord = {
     id: crypto.randomUUID(),
     targetType,
     targetId,
@@ -333,8 +674,10 @@ app.post('/api/reports', (req, res) => {
     status: 'open',
     createdAt: new Date().toISOString()
   };
-  contentReports.unshift(report);
-  res.status(201).json({ ok: true, report });
+  const persistedReport = await insertReportToSupabase(initialReport);
+  contentReports.unshift(persistedReport);
+  saveStoreToDisk();
+  res.status(201).json({ ok: true, report: persistedReport });
 });
 
 // Admin authentication & bootstrap status
@@ -502,7 +845,10 @@ app.get('/api/admin/overview', requireAdmin, (_req, res) => {
       adminSessionSecretConfigured: Boolean(envAdminSessionSecret),
       adminSessionSecretStrong: envAdminSessionSecret.length >= 32,
       tmdbConfigured: Boolean(token),
-      supabaseConfigured: Boolean(supabaseUrl && supabaseAnonKey)
+      supabaseConfigured: Boolean(supabaseUrl && supabaseAnonKey),
+      supabaseServiceRoleConfigured: Boolean(supabaseUrl && supabaseServiceRoleKey),
+      supabaseTablesReady,
+      persistenceMode: supabaseUrl && supabaseServiceRoleKey && supabaseTablesReady ? 'supabase+disk' : 'disk'
     }
   });
 });
@@ -511,7 +857,7 @@ app.get('/api/admin/sources', requireAdmin, (_req, res) => {
   res.json({ sources: adminSources, featuredConfig });
 });
 
-app.post('/api/admin/sources', requireAdmin, (req, res) => {
+app.post('/api/admin/sources', requireAdmin, async (req, res) => {
   const body = req.body || {};
   const id = typeof body.id === 'string' && body.id.trim() ? body.id.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-') : crypto.randomUUID().slice(0, 12);
   const titleVal = typeof body.title === 'string' ? body.title.trim() : '';
@@ -521,10 +867,21 @@ app.post('/api/admin/sources', requireAdmin, (req, res) => {
   const rightsUrl = typeof body.rightsUrl === 'string' ? body.rightsUrl.trim() : '';
   const runtimeSeconds = Number(body.runtimeSeconds);
 
-  if (!titleVal || !Number.isInteger(year) || year < 1888 || !isAllowedMediaHost(videoUrl) || !itemUrl.startsWith('http') || !rightsUrl.startsWith('http') || !Number.isFinite(runtimeSeconds) || runtimeSeconds <= 0) {
-    res.status(400).json({ error: 'Valid title, year, runtimeSeconds, itemUrl, rightsUrl, and HTTPS archive.org / tile.loc.gov videoUrl are required' });
+  if (!titleVal || !Number.isInteger(year) || year < 1888 || !isAllowedMediaHost(videoUrl) || !isSafeHttpUrl(itemUrl) || !isSafeHttpUrl(rightsUrl) || !Number.isFinite(runtimeSeconds) || runtimeSeconds <= 0) {
+    res.status(400).json({ error: 'Valid title, year, runtimeSeconds, itemUrl, rightsUrl, and HTTPS allowlisted videoUrl are required' });
     return;
   }
+
+  const fallbackUrls = Array.isArray(body.fallbackUrls)
+    ? body.fallbackUrls
+        .filter((u: unknown): u is string => typeof u === 'string')
+        .map((u: string) => u.trim())
+        .filter((u: string) => isAllowedMediaHost(u))
+    : [];
+
+  const qualitySources = Array.isArray(body.qualitySources)
+    ? body.qualitySources.filter((q: any) => typeof q?.label === 'string' && q.label.trim() && isAllowedMediaHost(q?.url))
+    : [];
 
   const record: AdminCuratedSource = {
     id,
@@ -534,6 +891,8 @@ app.post('/api/admin/sources', requireAdmin, (req, res) => {
     description: typeof body.description === 'string' && body.description.trim() ? body.description.trim() : `${titleVal} (${year})`,
     itemUrl,
     videoUrl,
+    fallbackUrls,
+    qualitySources,
     playerType: body.playerType === 'hls' ? 'hls' : body.playerType === 'embed' ? 'embed' : 'mp4',
     provider: typeof body.provider === 'string' && body.provider.trim() ? body.provider.trim() : 'Internet Archive',
     rightsLabel: typeof body.rightsLabel === 'string' && body.rightsLabel.trim() ? body.rightsLabel.trim() : 'Public Domain / Open License',
@@ -541,8 +900,9 @@ app.post('/api/admin/sources', requireAdmin, (req, res) => {
     rightsNote: typeof body.rightsNote === 'string' && body.rightsNote.trim() ? body.rightsNote.trim() : 'Verified by Aurora administrator.',
     attribution: typeof body.attribution === 'string' && body.attribution.trim() ? body.attribution.trim() : `${titleVal} (${year})`,
     runtimeSeconds: Math.round(runtimeSeconds),
+    completeness: body.completeness === 'incomplete' ? 'incomplete' : 'complete',
     contentType: body.contentType === 'short' ? 'short' : 'feature',
-    posterPath: typeof body.posterPath === 'string' && body.posterPath.trim() ? body.posterPath.trim() : undefined,
+    posterPath: sanitizePosterPath(body.posterPath),
     subtitles: Array.isArray(body.subtitles)
       ? body.subtitles.filter((s: any) => s?.label && s?.lang && isAllowedMediaHost(s?.url))
       : [],
@@ -555,10 +915,12 @@ app.post('/api/admin/sources', requireAdmin, (req, res) => {
   if (existingIdx >= 0) adminSources[existingIdx] = record;
   else adminSources.unshift(record);
 
+  saveStoreToDisk();
+  await syncSourceToSupabase(record);
   res.status(201).json({ ok: true, source: record });
 });
 
-app.put('/api/admin/sources/:id', requireAdmin, (req, res) => {
+app.put('/api/admin/sources/:id', requireAdmin, async (req, res) => {
   const idx = adminSources.findIndex(s => s.id === req.params.id);
   if (idx < 0) {
     res.status(404).json({ error: 'Custom source not found' });
@@ -567,27 +929,40 @@ app.put('/api/admin/sources/:id', requireAdmin, (req, res) => {
   const current = adminSources[idx];
   const body = req.body || {};
   if (body.videoUrl && !isAllowedMediaHost(body.videoUrl)) {
-    res.status(400).json({ error: 'videoUrl must be an HTTPS URL on archive.org or tile.loc.gov' });
+    res.status(400).json({ error: 'videoUrl must be an HTTPS URL on an allowlisted media host' });
     return;
   }
+  const nextFallbackUrls = Array.isArray(body.fallbackUrls)
+    ? body.fallbackUrls
+        .filter((u: unknown): u is string => typeof u === 'string')
+        .map((u: string) => u.trim())
+        .filter((u: string) => isAllowedMediaHost(u))
+    : current.fallbackUrls;
+
   adminSources[idx] = {
     ...current,
     title: typeof body.title === 'string' && body.title.trim() ? body.title.trim() : current.title,
     active: typeof body.active === 'boolean' ? body.active : current.active,
     featured: typeof body.featured === 'boolean' ? body.featured : current.featured,
     videoUrl: typeof body.videoUrl === 'string' && body.videoUrl.trim() ? body.videoUrl.trim() : current.videoUrl,
+    playerType: body.playerType === 'hls' || body.playerType === 'mp4' || body.playerType === 'embed' ? body.playerType : current.playerType,
+    fallbackUrls: nextFallbackUrls,
     updatedAt: new Date().toISOString()
   };
+  saveStoreToDisk();
+  await syncSourceToSupabase(adminSources[idx]);
   res.json({ ok: true, source: adminSources[idx] });
 });
 
-app.delete('/api/admin/sources/:id', requireAdmin, (req, res) => {
+app.delete('/api/admin/sources/:id', requireAdmin, async (req, res) => {
   const idx = adminSources.findIndex(s => s.id === req.params.id);
   if (idx < 0) {
     res.status(404).json({ error: 'Custom source not found' });
     return;
   }
-  adminSources.splice(idx, 1);
+  const [removed] = adminSources.splice(idx, 1);
+  saveStoreToDisk();
+  await deleteSourceFromSupabase(removed.id);
   res.json({ ok: true });
 });
 
@@ -595,7 +970,7 @@ app.get('/api/admin/featured', requireAdmin, (_req, res) => {
   res.json({ featuredConfig });
 });
 
-app.put('/api/admin/featured', requireAdmin, (req, res) => {
+app.put('/api/admin/featured', requireAdmin, async (req, res) => {
   const heroTmdbIds = Array.isArray(req.body?.heroTmdbIds)
     ? req.body.heroTmdbIds.map((n: any) => Number(n)).filter((n: number) => Number.isInteger(n) && n > 0).slice(0, 10)
     : featuredConfig.heroTmdbIds;
@@ -606,6 +981,8 @@ app.put('/api/admin/featured', requireAdmin, (req, res) => {
     ? req.body.disabledSourceIds.filter((s: any) => typeof s === 'string')
     : featuredConfig.disabledSourceIds;
   featuredConfig = { heroTmdbIds, curatedShelfTitle, disabledSourceIds };
+  saveStoreToDisk();
+  await syncFeaturedToSupabase();
   res.json({ ok: true, featuredConfig });
 });
 
@@ -613,7 +990,7 @@ app.get('/api/admin/reports', requireAdmin, (_req, res) => {
   res.json({ reports: contentReports });
 });
 
-app.patch('/api/admin/reports/:id', requireAdmin, (req, res) => {
+app.patch('/api/admin/reports/:id', requireAdmin, async (req, res) => {
   const report = contentReports.find(r => r.id === req.params.id);
   if (!report) {
     res.status(404).json({ error: 'Report not found' });
@@ -625,6 +1002,8 @@ app.patch('/api/admin/reports/:id', requireAdmin, (req, res) => {
     return;
   }
   report.status = status;
+  saveStoreToDisk();
+  await updateReportInSupabase(report.id, status);
   res.json({ ok: true, report });
 });
 
@@ -652,7 +1031,10 @@ app.get('/api/tmdb/*', (req, res, next) => {
     res.status(cached.status).json(cached.body);
     return;
   }
-  fetch(url, { headers: { Authorization: `Bearer ${token}`, accept: 'application/json' } })
+  fetch(url, {
+    headers: { Authorization: `Bearer ${token}`, accept: 'application/json' },
+    signal: AbortSignal.timeout(8000)
+  })
     .then(async r => {
       const data = await r.json();
       if (r.ok) {
@@ -664,8 +1046,22 @@ app.get('/api/tmdb/*', (req, res, next) => {
       }
       res.status(r.status).json(data);
     })
-    .catch(next);
+    .catch(() => {
+      res.status(502).json({ error: 'Movie metadata service temporarily unavailable' });
+    });
 });
+
+function convertSrtToVtt(raw: string): string {
+  const clean = raw.replace(/^\uFEFF/, '');
+  if (clean.trimStart().startsWith('WEBVTT')) return clean;
+  const normalized = clean
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .replace(/(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})/g, (_m, hh, mm, ss, ms) => {
+      return `${String(hh).padStart(2, '0')}:${mm}:${ss}.${String(ms).padEnd(3, '0')}`;
+    });
+  return `WEBVTT\n\n${normalized}`;
+}
 
 app.get('/api/free-films/verify', async (req, res) => {
   const rawUrl = typeof req.query.url === 'string' ? req.query.url.trim() : '';
@@ -674,25 +1070,45 @@ app.get('/api/free-films/verify', async (req, res) => {
     return;
   }
   if (!isAllowedMediaHost(rawUrl)) {
-    res.status(403).json({ ok: false, error: 'Source host is not in the verified archive allowlist' });
+    res.status(403).json({ ok: false, error: 'Source host is not in the verified media allowlist' });
     return;
   }
   try {
-    const upstream = await fetch(rawUrl, { method: 'HEAD', redirect: 'follow' });
+    const upstream = await fetch(rawUrl, {
+      method: 'GET',
+      headers: { Range: 'bytes=0-65535' },
+      redirect: 'follow',
+      signal: AbortSignal.timeout(8000)
+    });
     const contentType = (upstream.headers.get('content-type') || '').toLowerCase();
-    const contentLength = Number(upstream.headers.get('content-length') || 0);
+    const contentRange = upstream.headers.get('content-range') || '';
     const acceptRanges = upstream.headers.get('accept-ranges') || '';
-    const isMedia =
+    const rangeTotal = contentRange.includes('/') ? Number(contentRange.split('/')[1]) : 0;
+    const headerLength = Number(upstream.headers.get('content-length') || 0);
+    const contentLength = Number.isFinite(rangeTotal) && rangeTotal > 0 ? rangeTotal : Number.isFinite(headerLength) ? headerLength : 0;
+    const rangeSupported = upstream.status === 206 || acceptRanges.toLowerCase().includes('bytes') || Boolean(contentRange);
+
+    const bytes = Buffer.from(await upstream.arrayBuffer());
+    const textSample = bytes.toString('utf8', 0, Math.min(bytes.length, 512));
+    const latinSample = bytes.toString('latin1', 0, Math.min(bytes.length, 256));
+    const isHlsPlaylist = textSample.trimStart().startsWith('#EXTM3U');
+    const isMp4Signature = latinSample.includes('ftyp');
+    const isMediaContentType =
       contentType.startsWith('video/') ||
       contentType.includes('mp4') ||
       contentType.includes('mpegurl') ||
-      rawUrl.toLowerCase().includes('.m3u8');
+      contentType.includes('octet-stream');
+    const signature = isHlsPlaylist ? 'hls-m3u8' : isMp4Signature ? 'mp4-ftyp' : 'unknown';
+    const ok = upstream.ok && (isHlsPlaylist || isMp4Signature || (isMediaContentType && rawUrl.toLowerCase().includes('.m3u8')));
+
     res.json({
-      ok: upstream.ok && isMedia,
+      ok,
       status: upstream.status,
       contentType,
-      contentLength: Number.isFinite(contentLength) ? contentLength : 0,
-      acceptRanges
+      contentLength,
+      acceptRanges: acceptRanges || (rangeSupported ? 'bytes' : ''),
+      rangeSupported,
+      signature
     });
   } catch {
     res.status(502).json({ ok: false, error: 'Could not reach video source' });
@@ -706,15 +1122,13 @@ app.get('/api/subtitles', async (req, res) => {
     return;
   }
   try {
-    const upstream = await fetch(rawUrl, { redirect: 'follow' });
+    const upstream = await fetch(rawUrl, { redirect: 'follow', signal: AbortSignal.timeout(8000) });
     if (!upstream.ok) {
       res.status(upstream.status).send('Subtitle unavailable');
       return;
     }
     const text = await upstream.text();
-    const vtt = text.trimStart().startsWith('WEBVTT')
-      ? text
-      : 'WEBVTT\n\n' + text.replace(/\r\n/g, '\n').replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2');
+    const vtt = convertSrtToVtt(text);
     res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
     res.send(vtt);
   } catch {
@@ -724,11 +1138,23 @@ app.get('/api/subtitles', async (req, res) => {
 
 app.all('/api/*', (_req, res) => res.status(404).json({ error: 'API endpoint not found' }));
 
-function start() {
+async function start() {
+  await hydrateStoreFromSupabase();
   const root = path.resolve(__dirname, '../dist');
-  app.use(express.static(root));
+  app.use(
+    express.static(root, {
+      setHeaders(res, filePath) {
+        if (filePath.endsWith('sw.js') || filePath.endsWith('registerSW.js')) {
+          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        } else if (filePath.endsWith('.webmanifest')) {
+          res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8');
+          res.setHeader('Cache-Control', 'public, max-age=3600');
+        }
+      }
+    })
+  );
   app.get('*', (_req, res) => res.sendFile(path.join(root, 'index.html')));
   app.listen(port, '0.0.0.0', () => console.log(`Aurora listening on ${port}`));
 }
 
-start();
+void start();

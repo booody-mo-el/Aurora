@@ -19,12 +19,13 @@ export default defineConfig({
         'offline.html'
       ],
       workbox: {
+        cleanupOutdatedCaches: true,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api\//],
         runtimeCaching: [
           {
-            urlPattern: /^\/api\/(admin|config|health)/i,
+            urlPattern: /^\/api\/(admin|config|health|subtitles|free-films)/i,
             handler: 'NetworkOnly'
           },
           {
@@ -36,7 +37,7 @@ export default defineConfig({
             handler: 'CacheFirst',
             options: {
               cacheName: 'aurora-fonts-cache',
-              expiration: { maxEntries: 16, maxAgeSeconds: 60 * 60 * 24 * 365 },
+              expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 365 },
               cacheableResponse: { statuses: [0, 200] }
             }
           },
@@ -45,7 +46,7 @@ export default defineConfig({
             handler: 'StaleWhileRevalidate',
             options: {
               cacheName: 'aurora-tmdb-images',
-              expiration: { maxEntries: 120, maxAgeSeconds: 60 * 60 * 24 * 14 },
+              expiration: { maxEntries: 150, maxAgeSeconds: 60 * 60 * 24 * 14 },
               cacheableResponse: { statuses: [0, 200] }
             }
           }

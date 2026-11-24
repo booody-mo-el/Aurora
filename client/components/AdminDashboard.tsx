@@ -37,6 +37,9 @@ type AdminOverview = {
     adminSessionSecretStrong: boolean;
     tmdbConfigured: boolean;
     supabaseConfigured: boolean;
+    supabaseServiceRoleConfigured?: boolean;
+    supabaseTablesReady?: boolean;
+    persistenceMode?: 'supabase+disk' | 'disk';
   };
 };
 
@@ -80,6 +83,9 @@ export default function AdminDashboard({
   const [srcYear, setSrcYear] = useState('1960');
   const [srcTmdbId, setSrcTmdbId] = useState('');
   const [srcVideoUrl, setSrcVideoUrl] = useState('');
+  const [srcFallbackUrl, setSrcFallbackUrl] = useState('');
+  const [srcPlayerType, setSrcPlayerType] = useState<'mp4' | 'hls'>('mp4');
+  const [srcContentType, setSrcContentType] = useState<'feature' | 'short'>('feature');
   const [srcItemUrl, setSrcItemUrl] = useState('');
   const [srcRightsUrl, setSrcRightsUrl] = useState('https://creativecommons.org/publicdomain/mark/1.0/');
   const [srcRuntime, setSrcRuntime] = useState('4500');
@@ -215,6 +221,11 @@ export default function AdminDashboard({
         year: Number(srcYear),
         tmdbId: srcTmdbId ? Number(srcTmdbId) : undefined,
         videoUrl: srcVideoUrl,
+        fallbackUrls: srcFallbackUrl.trim()
+          ? srcFallbackUrl.split(',').map(s => s.trim()).filter(Boolean)
+          : [],
+        playerType: srcPlayerType,
+        contentType: srcContentType,
         itemUrl: srcItemUrl,
         rightsUrl: srcRightsUrl,
         runtimeSeconds: Number(srcRuntime),
@@ -232,10 +243,11 @@ export default function AdminDashboard({
     }
     setSrcTitle('');
     setSrcVideoUrl('');
+    setSrcFallbackUrl('');
     setSrcItemUrl('');
     setSrcSubtitleUrl('');
     setSrcDesc('');
-    setStatusMsg('Verified streaming source added.');
+    setStatusMsg('Verified streaming source added and persisted.');
     await loadAdminData(adminBearer);
     onSourcesUpdated();
   }
@@ -445,22 +457,26 @@ export default function AdminDashboard({
               <div className="detailSectionHead">
                 <div><p className="eyebrow">ENVIRONMENT CHECK</p><h2>Security &amp; Integration Status</h2></div>
               </div>
-              <div className="archiveSourceMeta">
-                <div>
+              <div className="archiveSourceMeta adminHealthGrid">
+                <div className={overview.configHealth.adminPasscodeConfigured ? 'healthOk' : 'healthWarn'}>
                   <small>Admin Passcode</small>
                   <strong>{overview.configHealth.adminPasscodeConfigured ? (overview.configHealth.adminPasscodeLengthOk ? 'Configured (ok)' : 'Configured (short)') : 'Missing'}</strong>
                 </div>
-                <div>
+                <div className={overview.configHealth.adminEmailsConfigured ? 'healthOk' : 'healthWarn'}>
                   <small>Admin Emails Allowlist</small>
                   <strong>{overview.configHealth.adminEmailsConfigured ? `Configured (${overview.configHealth.adminEmailsCount} listed)` : 'Not restricted'}</strong>
                 </div>
-                <div>
+                <div className={overview.configHealth.adminSessionSecretConfigured ? 'healthOk' : 'healthWarn'}>
                   <small>Session Signing Secret</small>
                   <strong>{overview.configHealth.adminSessionSecretConfigured ? (overview.configHealth.adminSessionSecretStrong ? 'Configured (strong)' : 'Configured (< 32 chars)') : 'Missing'}</strong>
                 </div>
-                <div>
-                  <small>Core APIs</small>
-                  <strong>TMDB {overview.configHealth.tmdbConfigured ? 'OK' : 'Missing'} · Supabase {overview.configHealth.supabaseConfigured ? 'OK' : 'Missing'}</strong>
+                <div className={overview.configHealth.tmdbConfigured && overview.configHealth.supabaseConfigured ? 'healthOk' : 'healthWarn'}>
+                  <small>Core APIs &amp; Persistence</small>
+                  <strong>
+                    TMDB {overview.configHealth.tmdbConfigured ? 'OK' : 'Missing'} ·{' '}
+                    Supabase {overview.configHealth.supabaseConfigured ? 'OK' : 'Missing'} ·{' '}
+                    Store {overview.configHealth.persistenceMode === 'supabase+disk' ? 'Supabase + Disk' : 'Disk (local)'}
+                  </strong>
                 </div>
               </div>
             </section>
@@ -471,7 +487,7 @@ export default function AdminDashboard({
               <div><p className="eyebrow">RECENT ACTIVITY</p><h2>Playback &amp; Catalog Events</h2></div>
             </div>
             {overview.analytics.recentEvents.length === 0 ? (
-              <p className="muted">No activity recorded yet in this server session.</p>
+              <p className="muted">No activity recorded yet.</p>
             ) : (
               <div className="reviewList">
                 {overview.analytics.recentEvents.map((ev, i) => (
@@ -493,7 +509,7 @@ export default function AdminDashboard({
         <div className="adminSplit">
           <form className="profileEditorCard" onSubmit={addSource}>
             <h2><Plus size={16} /> Add Verified Stream Source</h2>
-            <p className="muted">Only HTTPS media URLs from verified archive hosts (`archive.org`, `tile.loc.gov`) are permitted.</p>
+            <p className="muted">Only HTTPS media URLs from allowlisted hosts (archive.org, tile.loc.gov, test-streams.mux.dev, download.blender.org) are permitted.</p>
             <label className="authField"><span>Title</span><input required value={srcTitle} onChange={e => setSrcTitle(e.target.value)} placeholder="e.g. Nosferatu" /></label>
             <div className="adminRowTwo">
               <label className="authField"><span>Year</span><input type="number" required value={srcYear} onChange={e => setSrcYear(e.target.value)} /></label>
@@ -503,7 +519,24 @@ export default function AdminDashboard({
               <label className="authField"><span>TMDB Movie ID (optional)</span><input type="number" value={srcTmdbId} onChange={e => setSrcTmdbId(e.target.value)} placeholder="653" /></label>
               <label className="authField"><span>Provider</span><input required value={srcProvider} onChange={e => setSrcProvider(e.target.value)} /></label>
             </div>
+            <div className="adminRowTwo">
+              <label className="authField">
+                <span>Stream Format</span>
+                <select className="sortSelect" value={srcPlayerType} onChange={e => setSrcPlayerType(e.target.value as 'mp4' | 'hls')}>
+                  <option value="mp4">MP4 (Progressive H.264/AAC)</option>
+                  <option value="hls">HLS (.m3u8 Adaptive)</option>
+                </select>
+              </label>
+              <label className="authField">
+                <span>Category</span>
+                <select className="sortSelect" value={srcContentType} onChange={e => setSrcContentType(e.target.value as 'feature' | 'short')}>
+                  <option value="feature">Full Feature</option>
+                  <option value="short">Short Film</option>
+                </select>
+              </label>
+            </div>
             <label className="authField"><span>Video URL (HTTPS MP4 or HLS .m3u8)</span><input type="url" required value={srcVideoUrl} onChange={e => setSrcVideoUrl(e.target.value)} placeholder="https://archive.org/download/..." /></label>
+            <label className="authField"><span>Fallback Mirror URLs (comma-separated, optional)</span><input value={srcFallbackUrl} onChange={e => setSrcFallbackUrl(e.target.value)} placeholder="https://archive.org/download/..._512kb.mp4" /></label>
             <label className="authField"><span>Source Record URL</span><input type="url" required value={srcItemUrl} onChange={e => setSrcItemUrl(e.target.value)} placeholder="https://archive.org/details/..." /></label>
             <label className="authField"><span>License / Rights URL</span><input type="url" required value={srcRightsUrl} onChange={e => setSrcRightsUrl(e.target.value)} /></label>
             <label className="authField"><span>External Subtitle URL (.vtt/.srt, optional)</span><input type="url" value={srcSubtitleUrl} onChange={e => setSrcSubtitleUrl(e.target.value)} placeholder="https://archive.org/download/.../subs.srt" /></label>
@@ -511,8 +544,8 @@ export default function AdminDashboard({
             <button type="submit" className="primary">Save Verified Source</button>
           </form>
 
-          <div>
-            <h3>Custom Admin Sources ({customSources.length})</h3>
+          <div className="adminColumn">
+            <h3 className="adminListTitle">Custom Admin Sources ({customSources.length})</h3>
             <div className="reviewList">
               {customSources.map(src => (
                 <article className="reviewCard" key={src.id}>
@@ -520,7 +553,7 @@ export default function AdminDashboard({
                     <b>{src.title} ({src.year})</b>
                     <span>{src.active ? 'Active' : 'Disabled'}</span>
                   </div>
-                  <p>{src.provider} · {src.videoUrl}</p>
+                  <p className="adminSourceUrl">{src.provider} · {src.videoUrl}</p>
                   <div className="historyCardActions">
                     <button className="secondary" onClick={() => toggleCustomSource(src.id, src.active)}>
                       {src.active ? 'Disable' : 'Enable'}
@@ -534,7 +567,7 @@ export default function AdminDashboard({
               {!customSources.length && <p className="muted">No custom sources added yet.</p>}
             </div>
 
-            <h3 style={{ marginTop: 28 }}>Built-in Verified Sources ({builtinSources.length})</h3>
+            <h3 className="adminListTitle spaced">Built-in Verified Sources ({builtinSources.length})</h3>
             <div className="reviewList">
               {builtinSources.map(src => {
                 const disabled = overview?.featuredConfig?.disabledSourceIds?.includes(src.id);
