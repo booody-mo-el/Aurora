@@ -1561,6 +1561,15 @@ function App() {
               setIntroVisible(false);
             }}
           />
+          <div className="introLightField" aria-hidden="true">
+            <span className="introOrb" />
+            <span className="introRing introRingA" />
+            <span className="introRing introRingB" />
+            <span className="introBeam introBeamA" />
+            <span className="introBeam introBeamB" />
+            <span className="introParticles" />
+          </div>
+          <div className="introPortal" aria-hidden="true" />
           <div className="introVignette" />
           <div className="introWordmark"><span className="brandMark">◜</span><b>Aurora</b></div>
         </div>
@@ -2622,6 +2631,7 @@ function App() {
               <span className="auroraRibbon ribbonB" />
               <span className="auroraRibbon ribbonC" />
             </div>
+            <div className="heroLightSweep" aria-hidden="true" />
             <div className="heroInner">
               <div className="heroText">
                 <div className="eyebrow"><Sparkles size={13} /> Featured for {activeProfile.name}</div>
