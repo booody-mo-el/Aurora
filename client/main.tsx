@@ -6,6 +6,7 @@ import {
   Clapperboard,
   Compass,
   Download,
+  ExternalLink,
   Film as FilmIcon,
   Flag,
   Heart,
@@ -171,6 +172,7 @@ function App() {
   const [shows, setShows] = useState<Film[]>([]);
   const [animeList, setAnimeList] = useState<Film[]>([]);
   const [recentList, setRecentList] = useState<Film[]>([]);
+  const [licensedModernList, setLicensedModernList] = useState<Film[]>([]);
   const [topMovies, setTopMovies] = useState<Film[]>([]);
   const [personalizedRecs, setPersonalizedRecs] = useState<Film[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
@@ -284,6 +286,7 @@ function App() {
     link?: string;
     flatrate: WatchProvider[];
     free: WatchProvider[];
+    ads: WatchProvider[];
     rent: WatchProvider[];
     buy: WatchProvider[];
   } | null>(null);
@@ -417,19 +420,23 @@ function App() {
     });
 
     const kidsFilter = activeProfile.is_kids ? '&with_genres=10751&certification_country=US&certification.lte=PG' : '';
+    const modernCutoff = new Date();
+    modernCutoff.setFullYear(modernCutoff.getFullYear() - 2);
+    const modernCutoffDate = modernCutoff.toISOString().slice(0, 10);
     const requests = [
       api('/trending/all/week?language=en-US'),
       api(`/discover/movie?language=en-US&sort_by=popularity.desc${kidsFilter}`),
       api(`/discover/tv?language=en-US&sort_by=popularity.desc${activeProfile.is_kids ? '&with_genres=10751' : ''}`),
       api('/movie/top_rated?language=en-US'),
       api('/movie/now_playing?language=en-US'),
+      api(`/discover/movie?language=en-US&sort_by=popularity.desc&include_adult=false&watch_region=EG&with_watch_monetization_types=flatrate%7Cfree%7Cads%7Crent%7Cbuy&primary_release_date.gte=${modernCutoffDate}&page=1`),
       api('/discover/tv?language=en-US&with_genres=16&with_original_language=ja&sort_by=popularity.desc'),
       api('/person/popular?language=en-US'),
       api('/genre/movie/list?language=en-US'),
       api('/genre/tv/list?language=en-US')
     ];
 
-    Promise.allSettled(requests).then(([trend, movie, tv, top, nowPlaying, anime, cast, mGenres, tGenres]) => {
+    Promise.allSettled(requests).then(([trend, movie, tv, top, nowPlaying, modernLicensed, anime, cast, mGenres, tGenres]) => {
       let successes = 0;
       const filterAdult = (list: Film[]) =>
         activeProfile.is_kids ? list.filter(f => !f.adult) : list;
@@ -456,6 +463,19 @@ function App() {
       if (nowPlaying.status === 'fulfilled') {
         successes++;
         setRecentList(filterAdult((nowPlaying.value.results || []).map((i: Film) => ({ ...i, media_type: 'movie' }))));
+      }
+      if (modernLicensed.status === 'fulfilled') {
+        successes++;
+        const modernQuery = `language=en-US&sort_by=popularity.desc&include_adult=false&watch_region=EG&with_watch_monetization_types=flatrate%7Cfree%7Cads%7Crent%7Cbuy&primary_release_date.gte=${modernCutoffDate}`;
+        const extraModernPages = Promise.allSettled([2, 3, 4, 5].map(page => api(`/discover/movie?${modernQuery}&page=${page}`)));
+        extraModernPages.then(pages => {
+          const extraResults = pages.flatMap(page => page.status === 'fulfilled' ? (page.value.results || []) : []);
+          const combined = [...(modernLicensed.value.results || []), ...extraResults]
+            .map((film: Film) => ({ ...film, media_type: 'movie' }))
+            .filter((film: Film) => !activeProfile.is_kids || !film.adult);
+          const unique = Array.from(new Map(combined.map((film: Film) => [film.id, film])).values()).slice(0, 50);
+          setLicensedModernList(unique);
+        });
       }
       if (anime.status === 'fulfilled') {
         successes++;
@@ -1172,14 +1192,16 @@ function App() {
     api(`/${detail[1]}/${detail[2]}/watch/providers`)
       .then(data => {
         if (cancelled || !data?.results) return;
-        const regionKey = data.results.US ? 'US' : Object.keys(data.results)[0];
-        if (!regionKey) return;
-        const entry = data.results[regionKey];
+        // Aurora's catalog is configured for Egypt: never show another country's offers as if they were available locally.
+        const regionKey = 'EG';
+        const entry = data.results.EG;
+        if (!entry) return;
         setWatchProviders({
           region: regionKey,
           link: entry.link,
           flatrate: entry.flatrate || [],
           free: entry.free || [],
+          ads: entry.ads || [],
           rent: entry.rent || [],
           buy: entry.buy || []
         });
@@ -1406,7 +1428,7 @@ function App() {
     );
   }
 
-  function shelf(label: string, items: Film[], to = '/discover', eyebrowText = 'Picked by Aurora') {
+  function shelf(label: string, items: Film[], to = '/discover', eyebrowText = 'Picked by Aurora', limit = 12) {
     return (
       <section className="shelf">
         <div className="shelfHead">
@@ -1416,7 +1438,7 @@ function App() {
         <div className="row">
           {homeLoading && !items.length
             ? Array.from({ length: 6 }, (_, i) => <div className="cardSkeleton" key={i} />)
-            : items.slice(0, 12).map(card)}
+            : items.slice(0, limit).map(card)}
           {!homeLoading && !items.length && <p className="muted">No titles available right now.</p>}
         </div>
       </section>
@@ -1521,7 +1543,7 @@ function App() {
   const detailShortMatch = detail && detail[1] === 'movie' && detailItem && !detailFreeMatch ? findFreeShortMatch(detailItem, allFreeFilms) : undefined;
   const hasExternalProviders = Boolean(
     watchProviders &&
-    (watchProviders.flatrate.length > 0 || watchProviders.free.length > 0 || watchProviders.rent.length > 0 || watchProviders.buy.length > 0)
+    (watchProviders.flatrate.length > 0 || watchProviders.free.length > 0 || watchProviders.ads.length > 0 || watchProviders.rent.length > 0 || watchProviders.buy.length > 0)
   );
   const detailCast: Person[] = (detailItem?.credits?.cast || []).slice(0, 12);
   const detailCrew: Person[] = (detailItem?.credits?.crew || [])
@@ -1936,7 +1958,7 @@ function App() {
             <section className="detailSection">
               <div className="detailSectionHead">
                 <div><p className="eyebrow">LEGAL PROVIDERS ({watchProviders.region})</p><h2>Where to watch</h2></div>
-                {watchProviders.link && <a className="archiveSource" href={watchProviders.link} target="_blank" rel="noreferrer">View on TMDB ↗</a>}
+                {watchProviders.link && <a className="archiveSource" href={watchProviders.link} target="_blank" rel="noreferrer">Open legal watch options ↗</a>}
               </div>
               <div className="providerGroups">
                 {watchProviders.free.length > 0 && (
@@ -1944,10 +1966,10 @@ function App() {
                     <small>Free</small>
                     <div className="providerList">
                       {watchProviders.free.map(p => (
-                        <span className="providerChip" key={`free-${p.provider_id}`}>
-                          {p.logo_path && <img src={img(p.logo_path, 'w92')} alt={p.provider_name} />}
-                          {p.provider_name}
-                        </span>
+                        <a className="providerChip" key={`free-${p.provider_id}`} href={watchProviders.link} target="_blank" rel="noreferrer" aria-label={`Find ${title(detailItem)} on ${p.provider_name}`}>
+                          {p.logo_path && <img src={img(p.logo_path, 'w92')} alt="" />}
+                          {p.provider_name} <ExternalLink size={11} />
+                        </a>
                       ))}
                     </div>
                   </div>
@@ -1957,10 +1979,23 @@ function App() {
                     <small>Stream</small>
                     <div className="providerList">
                       {watchProviders.flatrate.map(p => (
-                        <span className="providerChip" key={`flat-${p.provider_id}`}>
-                          {p.logo_path && <img src={img(p.logo_path, 'w92')} alt={p.provider_name} />}
-                          {p.provider_name}
-                        </span>
+                        <a className="providerChip" key={`flat-${p.provider_id}`} href={watchProviders.link} target="_blank" rel="noreferrer" aria-label={`Find ${title(detailItem)} on ${p.provider_name}`}>
+                          {p.logo_path && <img src={img(p.logo_path, 'w92')} alt="" />}
+                          {p.provider_name} <ExternalLink size={11} />
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {watchProviders.ads.length > 0 && (
+                  <div className="providerGroup">
+                    <small>Free with ads</small>
+                    <div className="providerList">
+                      {watchProviders.ads.map(p => (
+                        <a className="providerChip" key={`ads-${p.provider_id}`} href={watchProviders.link} target="_blank" rel="noreferrer" aria-label={`Find ${title(detailItem)} on ${p.provider_name}`}>
+                          {p.logo_path && <img src={img(p.logo_path, 'w92')} alt="" />}
+                          {p.provider_name} <ExternalLink size={11} />
+                        </a>
                       ))}
                     </div>
                   </div>
@@ -1970,10 +2005,10 @@ function App() {
                     <small>Rent</small>
                     <div className="providerList">
                       {watchProviders.rent.map(p => (
-                        <span className="providerChip" key={`rent-${p.provider_id}`}>
-                          {p.logo_path && <img src={img(p.logo_path, 'w92')} alt={p.provider_name} />}
-                          {p.provider_name}
-                        </span>
+                        <a className="providerChip" key={`rent-${p.provider_id}`} href={watchProviders.link} target="_blank" rel="noreferrer" aria-label={`Find ${title(detailItem)} on ${p.provider_name}`}>
+                          {p.logo_path && <img src={img(p.logo_path, 'w92')} alt="" />}
+                          {p.provider_name} <ExternalLink size={11} />
+                        </a>
                       ))}
                     </div>
                   </div>
@@ -1983,16 +2018,16 @@ function App() {
                     <small>Buy</small>
                     <div className="providerList">
                       {watchProviders.buy.map(p => (
-                        <span className="providerChip" key={`buy-${p.provider_id}`}>
-                          {p.logo_path && <img src={img(p.logo_path, 'w92')} alt={p.provider_name} />}
-                          {p.provider_name}
-                        </span>
+                        <a className="providerChip" key={`buy-${p.provider_id}`} href={watchProviders.link} target="_blank" rel="noreferrer" aria-label={`Find ${title(detailItem)} on ${p.provider_name}`}>
+                          {p.logo_path && <img src={img(p.logo_path, 'w92')} alt="" />}
+                          {p.provider_name} <ExternalLink size={11} />
+                        </a>
                       ))}
                     </div>
                   </div>
                 )}
               </div>
-              <p className="providerNote">Legal streaming availability provided by TMDB and JustWatch.</p>
+              <p className="providerNote">Provider availability is region-specific and supplied by TMDB in partnership with JustWatch. Aurora links to the provider listing; playback takes place on the licensed service.</p>
             </section>
           )}
 
@@ -2201,8 +2236,10 @@ function App() {
           <p className="eyebrow">PUBLIC-DOMAIN &amp; OPEN-LICENSE PICKS</p>
           <h1>Free <span>Films</span></h1>
           <p className="pageIntro muted">
-            Stream full-length public-domain feature films and archival shorts from beginning to end. Each title links to its source record and rights documentation.
+            Watch rights-documented public-domain and open-license films in Aurora, or explore newer releases and open their licensed streaming, rental, and purchase options for your region.
           </p>
+
+          {shelf(`Modern films with legal watch options in Egypt (${licensedModernList.length})`, licensedModernList, '/movies', 'Latest 2 years · Egypt provider listings · availability can change', 50)}
 
           <div className="freeFilmFilter" role="tablist" aria-label="Filter free films">
             <button className={freeFilmFilter === 'all' ? 'selected' : ''} onClick={() => setFreeFilmFilter('all')}>
@@ -2253,7 +2290,9 @@ function App() {
                         ? 'Verified Full Feature'
                         : selectedFreeFilm.completeness === 'incomplete'
                           ? 'Incomplete Archival Copy'
-                          : 'Historical Short'}
+                          : selectedFreeFilm.contentType === 'feature'
+                            ? 'Feature · Verification Pending'
+                            : 'Historical Short'}
                     </span>
                   </div>
                 </div>

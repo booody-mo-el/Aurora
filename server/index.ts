@@ -222,7 +222,9 @@ function isAllowedMediaHost(rawUrl: string): boolean {
       host.endsWith('.archive.org') ||
       host === 'tile.loc.gov' ||
       host === 'test-streams.mux.dev' ||
-      host === 'download.blender.org'
+      host === 'download.blender.org' ||
+      host === 'commons.wikimedia.org' ||
+      host === 'upload.wikimedia.org'
     );
   } catch {
     return false;
@@ -1093,13 +1095,14 @@ app.get('/api/free-films/verify', async (req, res) => {
     const latinSample = bytes.toString('latin1', 0, Math.min(bytes.length, 256));
     const isHlsPlaylist = textSample.trimStart().startsWith('#EXTM3U');
     const isMp4Signature = latinSample.includes('ftyp');
+    const isWebmSignature = bytes.length >= 4 && bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3;
     const isMediaContentType =
       contentType.startsWith('video/') ||
       contentType.includes('mp4') ||
       contentType.includes('mpegurl') ||
       contentType.includes('octet-stream');
-    const signature = isHlsPlaylist ? 'hls-m3u8' : isMp4Signature ? 'mp4-ftyp' : 'unknown';
-    const ok = upstream.ok && (isHlsPlaylist || isMp4Signature || (isMediaContentType && rawUrl.toLowerCase().includes('.m3u8')));
+    const signature = isHlsPlaylist ? 'hls-m3u8' : isMp4Signature ? 'mp4-ftyp' : isWebmSignature ? 'webm-ebml' : 'unknown';
+    const ok = upstream.ok && (isHlsPlaylist || isMp4Signature || isWebmSignature || (isMediaContentType && rawUrl.toLowerCase().includes('.m3u8')));
 
     res.json({
       ok,

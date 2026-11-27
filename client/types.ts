@@ -103,7 +103,7 @@ export type FreeFilm = {
   itemUrl: string;
   videoUrl?: string;
   fallbackUrls?: string[];
-  playerType?: 'mp4' | 'hls' | 'embed';
+  playerType?: 'mp4' | 'hls' | 'webm' | 'embed';
   embedUrl?: string;
   provider: string;
   rightsLabel: string;
