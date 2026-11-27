@@ -172,6 +172,7 @@ function App() {
   const [shows, setShows] = useState<Film[]>([]);
   const [animeList, setAnimeList] = useState<Film[]>([]);
   const [recentList, setRecentList] = useState<Film[]>([]);
+  const [licensedModernList, setLicensedModernList] = useState<Film[]>([]);
   const [topMovies, setTopMovies] = useState<Film[]>([]);
   const [personalizedRecs, setPersonalizedRecs] = useState<Film[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
@@ -424,13 +425,14 @@ function App() {
       api(`/discover/tv?language=en-US&sort_by=popularity.desc${activeProfile.is_kids ? '&with_genres=10751' : ''}`),
       api('/movie/top_rated?language=en-US'),
       api('/movie/now_playing?language=en-US'),
+      api(`/discover/movie?language=en-US&sort_by=popularity.desc&include_adult=false&watch_region=EG&with_watch_monetization_types=flatrate%7Cfree%7Cads%7Crent%7Cbuy&primary_release_date.gte=${new Date().getFullYear() - 2}-01-01`),
       api('/discover/tv?language=en-US&with_genres=16&with_original_language=ja&sort_by=popularity.desc'),
       api('/person/popular?language=en-US'),
       api('/genre/movie/list?language=en-US'),
       api('/genre/tv/list?language=en-US')
     ];
 
-    Promise.allSettled(requests).then(([trend, movie, tv, top, nowPlaying, anime, cast, mGenres, tGenres]) => {
+    Promise.allSettled(requests).then(([trend, movie, tv, top, nowPlaying, modernLicensed, anime, cast, mGenres, tGenres]) => {
       let successes = 0;
       const filterAdult = (list: Film[]) =>
         activeProfile.is_kids ? list.filter(f => !f.adult) : list;
@@ -457,6 +459,10 @@ function App() {
       if (nowPlaying.status === 'fulfilled') {
         successes++;
         setRecentList(filterAdult((nowPlaying.value.results || []).map((i: Film) => ({ ...i, media_type: 'movie' }))));
+      }
+      if (modernLicensed.status === 'fulfilled') {
+        successes++;
+        setLicensedModernList(filterAdult((modernLicensed.value.results || []).map((i: Film) => ({ ...i, media_type: 'movie' }))));
       }
       if (anime.status === 'fulfilled') {
         successes++;
@@ -2205,7 +2211,7 @@ function App() {
             Watch rights-documented public-domain and open-license films in Aurora, or explore newer releases and open their licensed streaming, rental, and purchase options for your region.
           </p>
 
-          {shelf('Modern releases — find licensed watch options', recentList, '/movies', 'Availability varies by country · powered by TMDB / JustWatch')}
+          {shelf('Modern films with legal watch options in Egypt', licensedModernList, '/movies', '2024 onward · filtered for listed Egypt watch options · provider availability can change')}
 
           <div className="freeFilmFilter" role="tablist" aria-label="Filter free films">
             <button className={freeFilmFilter === 'all' ? 'selected' : ''} onClick={() => setFreeFilmFilter('all')}>
