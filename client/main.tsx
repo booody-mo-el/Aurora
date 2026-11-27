@@ -6,6 +6,7 @@ import {
   Clapperboard,
   Compass,
   Download,
+  ExternalLink,
   Film as FilmIcon,
   Flag,
   Heart,
