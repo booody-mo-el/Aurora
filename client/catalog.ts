@@ -15,6 +15,83 @@ export async function api<T = any>(path: string): Promise<T> {
   return response.json();
 }
 
+
+const commonsArchiveFeatures: FreeFilm[] = [
+  commonsFeature("commons-below-the-surface-1920", "Below the Surface", 1920, 5042, "Below the Surface (1920).webm", "Silent American drama."),
+  commonsFeature("commons-daughter-of-dawn-1920", "The Daughter of Dawn", 1920, 4571, "The Daughter of Dawn (1920) by Norbert A. Myles.webm", "Silent Western filmed with an all-Native American cast."),
+  commonsFeature("commons-dr-jekyll-mr-hyde-1920", "Dr. Jekyll and Mr. Hyde", 1920, 4770, "Dr. Jekyll and Mr. Hyde (1920) by John S. Robertson HR.webm", "Silent horror adaptation of Robert Louis Stevenson's story."),
+  commonsFeature("commons-idol-dancer-1920", "The Idol Dancer", 1920, 6059, "\"The Idol Dancer\" (1920) .webm", "Silent drama directed by D. W. Griffith."),
+  commonsFeature("commons-just-pals-1920", "Just Pals", 1920, 2982, "Just Pals (1920).webm", "Silent comedy-drama directed by John Ford."),
+  commonsFeature("commons-love-flower-1920", "The Love Flower", 1920, 6252, "The Love Flower (1920) .webm", "Silent romantic adventure directed by D. W. Griffith."),
+  commonsFeature("commons-mark-of-zorro-1920", "The Mark of Zorro", 1920, 6400, "The Mark of Zorro (1920).webm", "Silent swashbuckling adventure starring Douglas Fairbanks."),
+  commonsFeature("commons-outside-the-law-1920", "Outside the Law", 1920, 4714, "Outside the Law (1920) by Tod Browning.webm", "Silent crime drama directed by Tod Browning."),
+  commonsFeature("commons-penalty-1920", "The Penalty", 1920, 5190, "The Penalty (Wallace Worsley, 1920).webm", "Silent crime thriller starring Lon Chaney."),
+  commonsFeature("commons-pollyanna-1920", "Pollyanna", 1920, 3452, "Pollyanna (1920).webm", "Silent family drama starring Mary Pickford."),
+  commonsFeature("commons-round-up-1920", "The Round-Up", 1920, 4144, "The Round-Up (1920).webm", "Silent Western starring Roscoe Arbuckle."),
+  commonsFeature("commons-sand-1920", "Sand", 1920, 5238, "Sand (1920).webm", "Silent Western starring William S. Hart."),
+  commonsFeature("commons-saphead-1920", "The Saphead", 1920, 4615, "The Saphead (1920).webm", "Silent comedy starring Buster Keaton."),
+  commonsFeature("commons-something-new-1920", "Something New", 1920, 3414, "Something New (1920) by Nell Shipman.webm", "Silent adventure film directed by Nell Shipman."),
+  commonsFeature("commons-sumurun-1920", "Sumurun (One Arabian Night)", 1920, 6164, "Sumurun - One Arabian Night (1920) by Ernst Lubitsch.webm", "Silent drama directed by Ernst Lubitsch."),
+  commonsFeature("commons-symbol-unconquered-1920", "The Symbol of the Unconquered", 1920, 3480, "Oscar Micheaux - The Symbol of the Unconquered (1920).webm", "Silent race drama directed by Oscar Micheaux."),
+  commonsFeature("commons-terror-island-1920", "Terror Island", 1920, 3213, "Terror Island (1920).webm", "Silent adventure mystery starring Houdini."),
+  commonsFeature("commons-testing-block-1920", "The Testing Block", 1920, 3981, "The Testing Block (1920).webm", "Silent Western starring Tom Mix."),
+  commonsFeature("commons-texan-1920", "The Texan", 1920, 2491, "The Texan (1920).webm", "Silent Western starring Tom Mix."),
+  commonsFeature("commons-virgin-stamboul-1920", "The Virgin of Stamboul", 1920, 4189, "The virgin of Stamboul (1920).webm", "Silent adventure drama."),
+  commonsFeature("commons-way-down-east-1920", "Way Down East", 1920, 8878, "Way Down East (film, 1920).webm", "Silent melodrama directed by D. W. Griffith."),
+  commonsFeature("commons-adventures-tarzan-1921", "The Adventures of Tarzan", 1921, 8030, "The Adventures of Tarzan (1921).webm", "Silent action adventure serial feature."),
+  commonsFeature("commons-affairs-anatol-1921", "The Affairs of Anatol", 1921, 7036, "The Affairs of Anatol (1921).webm", "Silent comedy-drama directed by Cecil B. DeMille."),
+  commonsFeature("commons-be-my-wife-1921", "Be My Wife", 1921, 3282, "Be My Wife (1921).webm", "Silent comedy starring Max Linder."),
+  commonsFeature("commons-blot-1921", "The Blot", 1921, 5652, "The Blot (1921) by Lois Weber.webm", "Silent social drama directed by Lois Weber."),
+  commonsFeature("commons-dream-street-1921", "Dream Street", 1921, 8094, "Dream Street (1921).webm", "Silent drama directed by D. W. Griffith."),
+  commonsFeature("commons-every-womans-problem-1921", "Every Woman's Problem", 1921, 3519, "Every Woman's Problem (1921).webm", "Silent drama directed by William A. Wellman."),
+  commonsFeature("commons-forbidden-fruit-1921", "Forbidden Fruit", 1921, 5190, "Forbidden Fruit (1921).webm", "Silent drama directed by Cecil B. DeMille."),
+  commonsFeature("commons-four-horsemen-1921", "The Four Horsemen of the Apocalypse", 1921, 7946, "The Four Horsemen of the Apocalypse (1921).webm", "Silent epic drama starring Rudolph Valentino."),
+  commonsFeature("commons-kid-1921", "The Kid", 1921, 4100, "The Kid (1921) by Charlie Chaplin.webm", "Charlie Chaplin's silent comedy-drama."),
+  commonsFeature("commons-love-light-1921", "The Love Light", 1921, 6034, "The Love Light 1921.webm", "Silent romantic drama starring Mary Pickford."),
+  commonsFeature("commons-orphans-storm-1921", "Orphans of the Storm", 1921, 8997, "Orphans of the Storm (1921).webm", "Silent historical drama directed by D. W. Griffith."),
+  commonsFeature("commons-sheik-1921", "The Sheik", 1921, 4537, "The Sheik (1921) by George Melford.webm", "Silent romantic drama starring Rudolph Valentino."),
+  commonsFeature("commons-three-musketeers-1921", "The Three Musketeers", 1921, 7132, "The Three Musketeers (1921).webm", "Silent swashbuckling adventure starring Douglas Fairbanks."),
+  commonsFeature("commons-too-wise-wives-1921", "Too Wise Wives", 1921, 4125, "Too Wise Wives (1921).webm", "Silent drama directed by Lois Weber."),
+];
+
+function commonsFeature(
+  id: string,
+  title: string,
+  year: number,
+  runtimeSeconds: number,
+  fileName: string,
+  description: string
+): FreeFilm {
+  const encodedFile = encodeURIComponent(fileName);
+  const filePage = `https://commons.wikimedia.org/wiki/File:${encodedFile.replace(/%20/g, '_')}`;
+  const streamUrl = `https://commons.wikimedia.org/wiki/Special:Redirect/file/${encodedFile}`;
+  return {
+    id,
+    title,
+    year,
+    description,
+    itemUrl: filePage,
+    videoUrl: streamUrl,
+    playerType: 'webm',
+    provider: 'Wikimedia Commons',
+    rightsLabel: 'Commons archival copy · territorial review pending',
+    rightsUrl: filePage,
+    rightsNote: 'See the linked Wikimedia Commons file record for the specific media license and copyright notice. For U.S. works published before January 1, 1931, the underlying film is generally public domain in the United States as of 2026. This does not determine Egyptian or other territorial rights, and separate music, restoration, or donor rights may differ. Aurora keeps this entry pending its own stream and territory review.',
+    attribution: `${title} (${year}), archival digital copy hosted on Wikimedia Commons.`,
+    runtimeSeconds,
+    completeness: 'complete',
+    contentType: 'feature',
+    sourceVerified: false,
+    availableQualities: ['Original Commons WebM'],
+    countryRestrictions: ['Territorial rights outside the United States require review'],
+    excerpts: [
+      { label: 'Opening', start: 0, end: 30 },
+      { label: 'Midpoint', start: Math.floor(runtimeSeconds / 2), end: Math.floor(runtimeSeconds / 2) + 30 },
+      { label: 'Finale', start: Math.max(0, runtimeSeconds - 40), end: Math.max(0, runtimeSeconds - 10) }
+    ]
+  };
+}
+
 export const baseFreeFilms: FreeFilm[] = [
   {
     id: 'night-of-the-living-dead-1968',
@@ -423,6 +500,7 @@ export const baseFreeFilms: FreeFilm[] = [
     countryRestrictions: ['US public-domain determination; verify Egyptian and other territorial rights'],
     excerpts: [{ label: 'Opening', start: 0, end: 30 }, { label: 'Midpoint', start: 2406, end: 2436 }, { label: 'Finale', start: 4775, end: 4805 }]
   },
+  ...commonsArchiveFeatures,
 ];
 
 export const isHttpUrl = (value: string | undefined) => {
