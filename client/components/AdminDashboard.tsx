@@ -84,7 +84,7 @@ export default function AdminDashboard({
   const [srcTmdbId, setSrcTmdbId] = useState('');
   const [srcVideoUrl, setSrcVideoUrl] = useState('');
   const [srcFallbackUrl, setSrcFallbackUrl] = useState('');
-  const [srcPlayerType, setSrcPlayerType] = useState<'mp4' | 'hls'>('mp4');
+  const [srcPlayerType, setSrcPlayerType] = useState<'mp4' | 'hls' | 'webm'>('mp4');
   const [srcContentType, setSrcContentType] = useState<'feature' | 'short'>('feature');
   const [srcItemUrl, setSrcItemUrl] = useState('');
   const [srcRightsUrl, setSrcRightsUrl] = useState('https://creativecommons.org/publicdomain/mark/1.0/');
@@ -509,7 +509,7 @@ export default function AdminDashboard({
         <div className="adminSplit">
           <form className="profileEditorCard" onSubmit={addSource}>
             <h2><Plus size={16} /> Add Verified Stream Source</h2>
-            <p className="muted">Only HTTPS media URLs from allowlisted hosts (archive.org, tile.loc.gov, test-streams.mux.dev, download.blender.org) are permitted.</p>
+            <p className="muted">Only HTTPS media URLs from allowlisted hosts (archive.org, tile.loc.gov, test-streams.mux.dev, download.blender.org, commons.wikimedia.org) are permitted.</p>
             <label className="authField"><span>Title</span><input required value={srcTitle} onChange={e => setSrcTitle(e.target.value)} placeholder="e.g. Nosferatu" /></label>
             <div className="adminRowTwo">
               <label className="authField"><span>Year</span><input type="number" required value={srcYear} onChange={e => setSrcYear(e.target.value)} /></label>
@@ -522,9 +522,10 @@ export default function AdminDashboard({
             <div className="adminRowTwo">
               <label className="authField">
                 <span>Stream Format</span>
-                <select className="sortSelect" value={srcPlayerType} onChange={e => setSrcPlayerType(e.target.value as 'mp4' | 'hls')}>
+                <select className="sortSelect" value={srcPlayerType} onChange={e => setSrcPlayerType(e.target.value as 'mp4' | 'hls' | 'webm')}>
                   <option value="mp4">MP4 (Progressive H.264/AAC)</option>
                   <option value="hls">HLS (.m3u8 Adaptive)</option>
+                  <option value="webm">WebM (VP8/VP9)</option>
                 </select>
               </label>
               <label className="authField">
@@ -535,7 +536,7 @@ export default function AdminDashboard({
                 </select>
               </label>
             </div>
-            <label className="authField"><span>Video URL (HTTPS MP4 or HLS .m3u8)</span><input type="url" required value={srcVideoUrl} onChange={e => setSrcVideoUrl(e.target.value)} placeholder="https://archive.org/download/..." /></label>
+            <label className="authField"><span>Video URL (HTTPS MP4, WebM or HLS .m3u8)</span><input type="url" required value={srcVideoUrl} onChange={e => setSrcVideoUrl(e.target.value)} placeholder="https://archive.org/download/..." /></label>
             <label className="authField"><span>Fallback Mirror URLs (comma-separated, optional)</span><input value={srcFallbackUrl} onChange={e => setSrcFallbackUrl(e.target.value)} placeholder="https://archive.org/download/..._512kb.mp4" /></label>
             <label className="authField"><span>Source Record URL</span><input type="url" required value={srcItemUrl} onChange={e => setSrcItemUrl(e.target.value)} placeholder="https://archive.org/details/..." /></label>
             <label className="authField"><span>License / Rights URL</span><input type="url" required value={srcRightsUrl} onChange={e => setSrcRightsUrl(e.target.value)} /></label>
