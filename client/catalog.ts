@@ -30,7 +30,7 @@ const commonsArchiveFeatures: FreeFilm[] = [
   commonsFeature("commons-round-up-1920", "The Round-Up", 1920, 4144, "The Round-Up (1920).webm", "Silent Western starring Roscoe Arbuckle."),
   commonsFeature("commons-sand-1920", "Sand", 1920, 5238, "Sand (1920).webm", "Silent Western starring William S. Hart."),
   commonsFeature("commons-saphead-1920", "The Saphead", 1920, 4615, "The Saphead (1920).webm", "Silent comedy starring Buster Keaton."),
-  commonsFeature("commons-something-new-1920", "Something New", 1920, 3414, "Something New (1920) by Nell Shipman.webm", "Silent adventure film directed by Nell Shipman."),
+  commonsFeature("commons-something-new-1920", "Something New", 1920, 3394, "Something New (1920) by Nell Shipman.webm", "Silent adventure film directed by Nell Shipman."),
   commonsFeature("commons-sumurun-1920", "Sumurun (One Arabian Night)", 1920, 6164, "Sumurun - One Arabian Night (1920) by Ernst Lubitsch.webm", "Silent drama directed by Ernst Lubitsch."),
   commonsFeature("commons-symbol-unconquered-1920", "The Symbol of the Unconquered", 1920, 3480, "Oscar Micheaux - The Symbol of the Unconquered (1920).webm", "Silent race drama directed by Oscar Micheaux."),
   commonsFeature("commons-terror-island-1920", "Terror Island", 1920, 3213, "Terror Island (1920).webm", "Silent adventure mystery starring Houdini."),
