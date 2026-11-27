@@ -2256,7 +2256,9 @@ function App() {
                         ? 'Verified Full Feature'
                         : selectedFreeFilm.completeness === 'incomplete'
                           ? 'Incomplete Archival Copy'
-                          : 'Historical Short'}
+                          : selectedFreeFilm.contentType === 'feature'
+                            ? 'Feature · Verification Pending'
+                            : 'Historical Short'}
                     </span>
                   </div>
                 </div>
