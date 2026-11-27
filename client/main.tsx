@@ -1172,7 +1172,7 @@ function App() {
     api(`/${detail[1]}/${detail[2]}/watch/providers`)
       .then(data => {
         if (cancelled || !data?.results) return;
-        const regionKey = data.results.US ? 'US' : Object.keys(data.results)[0];
+        const regionKey = data.results.EG ? 'EG' : data.results.US ? 'US' : Object.keys(data.results)[0];
         if (!regionKey) return;
         const entry = data.results[regionKey];
         setWatchProviders({
@@ -1936,7 +1936,7 @@ function App() {
             <section className="detailSection">
               <div className="detailSectionHead">
                 <div><p className="eyebrow">LEGAL PROVIDERS ({watchProviders.region})</p><h2>Where to watch</h2></div>
-                {watchProviders.link && <a className="archiveSource" href={watchProviders.link} target="_blank" rel="noreferrer">View on TMDB ↗</a>}
+                {watchProviders.link && <a className="archiveSource" href={watchProviders.link} target="_blank" rel="noreferrer">Open legal watch options ↗</a>}
               </div>
               <div className="providerGroups">
                 {watchProviders.free.length > 0 && (
@@ -1944,10 +1944,10 @@ function App() {
                     <small>Free</small>
                     <div className="providerList">
                       {watchProviders.free.map(p => (
-                        <span className="providerChip" key={`free-${p.provider_id}`}>
-                          {p.logo_path && <img src={img(p.logo_path, 'w92')} alt={p.provider_name} />}
-                          {p.provider_name}
-                        </span>
+                        <a className="providerChip" key={`free-${p.provider_id}`} href={watchProviders.link} target="_blank" rel="noreferrer" aria-label={`Find ${title(detailItem)} on ${p.provider_name}`}>
+                          {p.logo_path && <img src={img(p.logo_path, 'w92')} alt="" />}
+                          {p.provider_name} <ExternalLink size={11} />
+                        </a>
                       ))}
                     </div>
                   </div>
@@ -1957,10 +1957,10 @@ function App() {
                     <small>Stream</small>
                     <div className="providerList">
                       {watchProviders.flatrate.map(p => (
-                        <span className="providerChip" key={`flat-${p.provider_id}`}>
-                          {p.logo_path && <img src={img(p.logo_path, 'w92')} alt={p.provider_name} />}
-                          {p.provider_name}
-                        </span>
+                        <a className="providerChip" key={`flat-${p.provider_id}`} href={watchProviders.link} target="_blank" rel="noreferrer" aria-label={`Find ${title(detailItem)} on ${p.provider_name}`}>
+                          {p.logo_path && <img src={img(p.logo_path, 'w92')} alt="" />}
+                          {p.provider_name} <ExternalLink size={11} />
+                        </a>
                       ))}
                     </div>
                   </div>
@@ -1970,10 +1970,10 @@ function App() {
                     <small>Rent</small>
                     <div className="providerList">
                       {watchProviders.rent.map(p => (
-                        <span className="providerChip" key={`rent-${p.provider_id}`}>
-                          {p.logo_path && <img src={img(p.logo_path, 'w92')} alt={p.provider_name} />}
-                          {p.provider_name}
-                        </span>
+                        <a className="providerChip" key={`rent-${p.provider_id}`} href={watchProviders.link} target="_blank" rel="noreferrer" aria-label={`Find ${title(detailItem)} on ${p.provider_name}`}>
+                          {p.logo_path && <img src={img(p.logo_path, 'w92')} alt="" />}
+                          {p.provider_name} <ExternalLink size={11} />
+                        </a>
                       ))}
                     </div>
                   </div>
@@ -1983,16 +1983,16 @@ function App() {
                     <small>Buy</small>
                     <div className="providerList">
                       {watchProviders.buy.map(p => (
-                        <span className="providerChip" key={`buy-${p.provider_id}`}>
-                          {p.logo_path && <img src={img(p.logo_path, 'w92')} alt={p.provider_name} />}
-                          {p.provider_name}
-                        </span>
+                        <a className="providerChip" key={`buy-${p.provider_id}`} href={watchProviders.link} target="_blank" rel="noreferrer" aria-label={`Find ${title(detailItem)} on ${p.provider_name}`}>
+                          {p.logo_path && <img src={img(p.logo_path, 'w92')} alt="" />}
+                          {p.provider_name} <ExternalLink size={11} />
+                        </a>
                       ))}
                     </div>
                   </div>
                 )}
               </div>
-              <p className="providerNote">Legal streaming availability provided by TMDB and JustWatch.</p>
+              <p className="providerNote">Provider availability is region-specific and supplied by TMDB in partnership with JustWatch. Aurora links to the provider listing; playback takes place on the licensed service.</p>
             </section>
           )}
 
@@ -2201,8 +2201,10 @@ function App() {
           <p className="eyebrow">PUBLIC-DOMAIN &amp; OPEN-LICENSE PICKS</p>
           <h1>Free <span>Films</span></h1>
           <p className="pageIntro muted">
-            Stream full-length public-domain feature films and archival shorts from beginning to end. Each title links to its source record and rights documentation.
+            Watch rights-documented public-domain and open-license films in Aurora, or explore newer releases and open their licensed streaming, rental, and purchase options for your region.
           </p>
+
+          {shelf('Modern releases — find licensed watch options', recentList, '/movies', 'Availability varies by country · powered by TMDB / JustWatch')}
 
           <div className="freeFilmFilter" role="tablist" aria-label="Filter free films">
             <button className={freeFilmFilter === 'all' ? 'selected' : ''} onClick={() => setFreeFilmFilter('all')}>
