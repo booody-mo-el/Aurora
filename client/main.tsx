@@ -286,6 +286,7 @@ function App() {
     link?: string;
     flatrate: WatchProvider[];
     free: WatchProvider[];
+    ads: WatchProvider[];
     rent: WatchProvider[];
     buy: WatchProvider[];
   } | null>(null);
@@ -1191,14 +1192,16 @@ function App() {
     api(`/${detail[1]}/${detail[2]}/watch/providers`)
       .then(data => {
         if (cancelled || !data?.results) return;
-        const regionKey = data.results.EG ? 'EG' : data.results.US ? 'US' : Object.keys(data.results)[0];
-        if (!regionKey) return;
-        const entry = data.results[regionKey];
+        // Aurora's catalog is configured for Egypt: never show another country's offers as if they were available locally.
+        const regionKey = 'EG';
+        const entry = data.results.EG;
+        if (!entry) return;
         setWatchProviders({
           region: regionKey,
           link: entry.link,
           flatrate: entry.flatrate || [],
           free: entry.free || [],
+          ads: entry.ads || [],
           rent: entry.rent || [],
           buy: entry.buy || []
         });
@@ -1540,7 +1543,7 @@ function App() {
   const detailShortMatch = detail && detail[1] === 'movie' && detailItem && !detailFreeMatch ? findFreeShortMatch(detailItem, allFreeFilms) : undefined;
   const hasExternalProviders = Boolean(
     watchProviders &&
-    (watchProviders.flatrate.length > 0 || watchProviders.free.length > 0 || watchProviders.rent.length > 0 || watchProviders.buy.length > 0)
+    (watchProviders.flatrate.length > 0 || watchProviders.free.length > 0 || watchProviders.ads.length > 0 || watchProviders.rent.length > 0 || watchProviders.buy.length > 0)
   );
   const detailCast: Person[] = (detailItem?.credits?.cast || []).slice(0, 12);
   const detailCrew: Person[] = (detailItem?.credits?.crew || [])
@@ -1977,6 +1980,19 @@ function App() {
                     <div className="providerList">
                       {watchProviders.flatrate.map(p => (
                         <a className="providerChip" key={`flat-${p.provider_id}`} href={watchProviders.link} target="_blank" rel="noreferrer" aria-label={`Find ${title(detailItem)} on ${p.provider_name}`}>
+                          {p.logo_path && <img src={img(p.logo_path, 'w92')} alt="" />}
+                          {p.provider_name} <ExternalLink size={11} />
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {watchProviders.ads.length > 0 && (
+                  <div className="providerGroup">
+                    <small>Free with ads</small>
+                    <div className="providerList">
+                      {watchProviders.ads.map(p => (
+                        <a className="providerChip" key={`ads-${p.provider_id}`} href={watchProviders.link} target="_blank" rel="noreferrer" aria-label={`Find ${title(detailItem)} on ${p.provider_name}`}>
                           {p.logo_path && <img src={img(p.logo_path, 'w92')} alt="" />}
                           {p.provider_name} <ExternalLink size={11} />
                         </a>
