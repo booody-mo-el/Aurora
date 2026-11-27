@@ -1528,6 +1528,9 @@ h2 {
   color: var(--text-primary);
 }
 
+.providerChip { text-decoration: none; transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease; }
+.providerChip:hover { border-color: var(--accent); background: rgba(110, 231, 255, 0.09); transform: translateY(-1px); }
+
 .providerChip img {
   width: 24px;
   height: 24px;
